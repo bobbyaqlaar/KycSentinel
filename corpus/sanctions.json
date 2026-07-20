@@ -1,0 +1,5 @@
+[
+  {"entity": "Al-Noor Trading Company", "aliases": ["Al Noor Trading FZE", "Alnoor Trading", "Al Noor Trading Co"], "program": "SYN-1 (synthetic fixture)", "type": "company"},
+  {"entity": "Viktor Marchenko", "aliases": ["V. Marchenko", "Viktor Marchenco"], "program": "SYN-2 (synthetic fixture)", "type": "person"},
+  {"entity": "Crimson Star Logistics", "aliases": ["Crimson Star Logistics LLC", "CSL Shipping"], "program": "SYN-3 (synthetic fixture)", "type": "company"}
+]

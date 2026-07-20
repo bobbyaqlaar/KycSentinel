@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Local secrets / state
+.env
+.agent-history.log
+.agent-rfc/fixtures/sync_state.json
+.agent-rfc/fixtures/token_velocity_cache.json
+.agent-rfc/fixtures/eval_results.json
+.agent-rfc/fixtures/knowledge_graph.json
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+.claude/settings.local.json

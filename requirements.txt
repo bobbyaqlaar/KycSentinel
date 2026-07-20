@@ -1,0 +1,9 @@
+# KYC Sentinel tenant deps. The AgentSmith runtime itself is imported from
+# $AGENTSMITH_DIR (see agents/_framework.py) — its own deps are
+# $AGENTSMITH_DIR/runtime/requirements-runtime.txt.
+pydantic>=2.0,<3.0
+pyyaml>=6.0,<7.0
+httpx>=0.25,<1.0
+temporalio>=1.5,<2.0
+pytest>=8.0,<9.0
+pytest-asyncio>=0.23,<1.0

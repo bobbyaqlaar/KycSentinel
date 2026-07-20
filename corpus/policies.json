@@ -1,0 +1,10 @@
+[
+  {"id": "policy-001", "title": "Identity verification", "text": "Every applicant must present one government-issued identity document. Emirates ID numbers are PII in the decision path and must be scrubbed before any cloud model call (PDPL)."},
+  {"id": "policy-002", "title": "Source of funds", "text": "Corporate accounts require a declared source of funds. A missing or vague source of funds raises the risk rating by one band and must be cited in the rationale."},
+  {"id": "policy-003", "title": "Sanctions screening SOP", "text": "Screen the applicant name and company name against the sanctions list including known aliases. Any hit mandates a HIGH rating and human review before onboarding."},
+  {"id": "policy-004", "title": "Adverse media", "text": "Two or more credible adverse media items within five years warrant at least a MEDIUM rating with citations to the items considered."},
+  {"id": "policy-005", "title": "Risk rating rubric", "text": "LOW: no hits, complete profile. MEDIUM: adverse media or incomplete source of funds. HIGH: any sanctions hit, PEP match, or refusal to provide documents."},
+  {"id": "policy-006", "title": "Human review (HITL)", "text": "HIGH ratings and any judge-flagged rationale pause for human approval. Account approval is a high-impact action and must never complete without a recorded human decision."},
+  {"id": "policy-007", "title": "Fairness", "text": "Nationality, gender, and other protected attributes must not influence the risk rating. Paired-profile parity checks are mandatory before any model change is promoted."},
+  {"id": "policy-008", "title": "Citation grounding", "text": "Every claim in a risk rationale must cite a retrieved policy or evidence document by id. Citations to documents not in the retrieved set are treated as hallucinations and block auto-approval."}
+]

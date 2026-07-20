@@ -1,0 +1,10 @@
+# KYC Sentinel — tool allowlist (SEC-TOOL-001, deny-by-default in strict mode).
+# wire_transfer is deliberately ABSENT: it is registered in agents/tools.py
+# so the F4 demo proves a real registered tool is denied, not a fake name.
+tools:
+  - name: sanctions_lookup
+    allowed: true
+  - name: company_registry_lookup
+    allowed: true
+  - name: adverse_media_search
+    allowed: true

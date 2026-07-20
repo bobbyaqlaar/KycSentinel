@@ -1,0 +1,28 @@
+# KYC Sentinel — tenant model registry (merged over framework runtime/models.yaml).
+# Roles match gateway.routing_overrides in .agenticframework/tenant.yaml.
+# degrade_to chains implement the F5 ladder: analyst frontier → groq → local.
+models:
+  intake:
+    id: falcon3:3b
+    provider: ollama            # sovereign / in-border — PII never leaves
+    cost_per_input_token: 0.0
+    cost_per_output_token: 0.0
+    degrade_to: null            # PII route must not degrade to a cloud model
+  research:
+    id: llama-3.3-70b-versatile
+    provider: groq
+    cost_per_input_token: 0.00000059
+    cost_per_output_token: 0.00000079
+    degrade_to: intake
+  analyst:
+    id: claude-sonnet-4-6
+    provider: anthropic
+    cost_per_input_token: 0.000003
+    cost_per_output_token: 0.000015
+    degrade_to: research        # F5: frontier → groq → local
+  judge:
+    id: claude-sonnet-4-6
+    provider: anthropic
+    cost_per_input_token: 0.000003
+    cost_per_output_token: 0.000015
+    degrade_to: null            # judge must not silently downgrade

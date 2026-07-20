@@ -1,0 +1,36 @@
+# KYC Sentinel — AgentSmith tenant configuration (SPECS.md §23)
+tenant:
+  id: kyc-sentinel
+  name: "KYC Sentinel (testbed)"
+  isolation: dedicated          # exercises runtime/k8s/dedicated-tenant/
+  owner: bobbyaqlaar@gmail.com
+
+framework:
+  version: "1.0.x"
+
+gateway:
+  # Per-agent model routes (overrides framework runtime/models.yaml roles).
+  # Multi-LLM is structural: sovereign-local for PII, cheap cloud for
+  # volume, frontier for judgment, independent judge (RFC-002).
+  routing_overrides:
+    intake: falcon3:3b
+    research: llama-3.3-70b-versatile
+    analyst: claude-sonnet-4-6
+    judge: claude-sonnet-4-6
+
+budget:
+  monthly_usd_cap: 5            # deliberately small — F5 degrade demo fires
+
+workflow:
+  engine: temporal
+  task_queue: kyc-sentinel
+
+hitl:
+  # Filled in at deploy time (portal "Replay with edits" → this webhook →
+  # runtime/replay_webhook_server.py → temporal_replay signal). F1 path.
+  # replay_webhook_url: https://worker.kyc-sentinel.example/replay
+  # replay_webhook_secret: <openssl rand -hex 32>
+
+delivery:
+  platform: gcp-cloud-run       # delivery-model soft gate satisfied
+  data_access_pattern: api-only

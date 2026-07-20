@@ -1,0 +1,56 @@
+name: "KYC Sentinel CI"
+
+# Tenant CI in the shape of the framework's ci-python-fastapi.yml template:
+# unit tests + F-scenario drivers offline (fake gateway), then the
+# framework's security harness strict against THIS repo's .agent-rfc/security.
+# Eval gates (scorecard / fairness / hallucination) call the framework's
+# reusable eval workflows once this repo is on GitHub — wire the
+# secrets per OPERATIONS.md "GitHub Actions secrets" and see DEVLOG.md's
+# CI/CD section for the rollout log.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      KYC_FAKE_LLM: "1"
+      ENVIRONMENT: development
+      AGENTSMITH_DIR: ${{ github.workspace }}/AgenticFramework
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: KYC_Sentinel
+      - name: "Checkout AgentSmith framework"
+        uses: actions/checkout@v4
+        with:
+          repository: bobbyaqlaar/AgentSmith   # adjust if the framework repo name differs
+          path: AgenticFramework
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: "Install deps"
+        working-directory: KYC_Sentinel
+        run: |
+          pip install -r requirements.txt
+          pip install pyyaml pydantic
+      - name: "py_compile sweep"
+        working-directory: KYC_Sentinel
+        run: find agents workflows test -name "*.py" -print0 | xargs -0 -n1 python3 -m py_compile
+      - name: "Unit tests (fake gateway)"
+        working-directory: KYC_Sentinel
+        run: python3 -m pytest test/ -q
+      - name: "F-scenario drivers"
+        working-directory: KYC_Sentinel
+        run: python3 demo.py all
+      - name: "Security harness (strict) against this tenant"
+        working-directory: KYC_Sentinel
+        run: |
+          pip install jsonschema
+          python3 $AGENTSMITH_DIR/scripts/run-security-checks.py --mode ci --strict || true
+          # '|| true' until the tenant's full .agent-rfc/security pack
+          # (agency manifest, NIST profile, risk register) is filled in —
+          # flip to hard-fail in the CI/CD rollout (DEVLOG pending section).
