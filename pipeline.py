@@ -29,6 +29,7 @@ from agents.models import JudgeVerdict, ResearchFindings, RiskAssessment
 from agents.research import run_research
 
 from runtime.prompt_guard import scan_prompt
+from runtime.tracing import agent_span
 
 
 @dataclass
@@ -56,10 +57,26 @@ async def process_application(gateway, submission: str, analyst_extra: str = "")
             guard_reasons=list(guard.reasons),
         )
 
-    intake: IntakeResult = await run_intake(gateway, submission)
-    findings = await run_research(gateway, intake.profile)
-    assessment = await run_analyst(gateway, intake.profile, findings, analyst_extra)
-    verdict = await run_judge(gateway, assessment, findings)
+    tenant = getattr(gateway, "tenant_id", "kyc-sentinel")
+
+    # Each step gets its own span (framework G8) so the non-LLM work — scrub
+    # counts, tool calls (auto-annotated by ToolRegistry.invoke), the judge
+    # verdict — is visible in Phoenix alongside the gateway's LLM spans, not
+    # just the model calls. No-ops cleanly when tracing is off.
+    with agent_span("intake", tenant_id=tenant) as span:
+        intake: IntakeResult = await run_intake(gateway, submission)
+        span.set_attribute("agent.pii_redactions", sum(intake.scrub_counts.values()))
+
+    with agent_span("research", tenant_id=tenant) as span:
+        findings = await run_research(gateway, intake.profile)
+        span.set_attribute("agent.sanctions_hits", len(findings.sanctions_hits))
+
+    with agent_span("analyst", tenant_id=tenant):
+        assessment = await run_analyst(gateway, intake.profile, findings, analyst_extra)
+
+    with agent_span("judge", tenant_id=tenant) as span:
+        verdict = await run_judge(gateway, assessment, findings)
+        span.set_attribute("agent.judge_flagged", verdict.flagged)
 
     if assessment.rating == "HIGH" or verdict.flagged:
         outcome = "hitl"  # policy-006: high-impact → human decision

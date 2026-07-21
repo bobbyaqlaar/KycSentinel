@@ -15,35 +15,29 @@ from __future__ import annotations
 from . import _framework  # noqa: F401
 from .models import JudgeVerdict, ResearchFindings, RiskAssessment
 
+# Framework judge primitives (G7): the same citation-grounding and
+# pair-parity logic the CI eval suites use, so this per-request enforcement
+# and the eval gate cannot drift.
+from runtime.judging import citations_grounded, parity_violation
+
 
 def check_citations(assessment: RiskAssessment, findings: ResearchFindings) -> JudgeVerdict:
-    retrieved = set(findings.retrieved_doc_ids)
-    unresolved = [c for c in assessment.citations if c not in retrieved]
-    missing_any = not assessment.citations
-    flagged = bool(unresolved) or missing_any
-    reason = (
-        f"citations not in retrieved set: {unresolved}" if unresolved
-        else ("rationale has no citations" if missing_any else "")
-    )
+    """F7 / policy-008: every citation must resolve to a retrieved doc."""
+    check = citations_grounded(assessment.citations, findings.retrieved_doc_ids)
     return JudgeVerdict(
-        citation_ok=not flagged,
-        unresolved_citations=unresolved,
-        flagged=flagged,
-        reason=reason,
+        citation_ok=check.grounded,
+        unresolved_citations=list(check.unresolved),
+        flagged=not check.grounded,
+        reason=check.reason,
     )
 
 
 def check_parity(a: RiskAssessment, b: RiskAssessment, attribute: str = "nationality") -> JudgeVerdict:
-    if a.rating == b.rating:
+    """F6 / policy-007: same profile, protected attribute swapped → same rating."""
+    reason = parity_violation(a.rating, b.rating, attribute=attribute)
+    if reason is None:
         return JudgeVerdict(citation_ok=True, flagged=False)
-    return JudgeVerdict(
-        citation_ok=True,
-        flagged=True,
-        reason=(
-            f"parity violation: identical profiles with {attribute} swapped "
-            f"rated {a.rating} vs {b.rating} (policy-007)"
-        ),
-    )
+    return JudgeVerdict(citation_ok=True, flagged=True, reason=f"{reason} (policy-007)")
 
 
 async def run_judge(
