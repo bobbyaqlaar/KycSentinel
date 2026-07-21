@@ -1,0 +1,30 @@
+# KYC Sentinel — NIST AI RMF profile (SEC-* ownership map).
+# Testbed tenant: the "organization" is the framework project itself.
+version: 1
+organization: "Aqlaar — AgentSmith testbed (KYC Sentinel)"
+functions:
+  GOVERN:
+    roles:
+      - name: AI system owner
+        control_ids: [SEC-RBAC-001, SEC-AUDIT-001]
+        owner: bobbyaqlaar@gmail.com
+  MAP:
+    roles:
+      - name: Risk owner
+        control_ids: [SEC-RISK-001, SEC-AGENCY-001]
+        owner: bobbyaqlaar@gmail.com
+  MEASURE:
+    roles:
+      - name: Eval owner
+        control_ids: [SEC-EVAL-001, SEC-EVAL-003, SEC-FAIR-001]
+        owner: bobbyaqlaar@gmail.com
+  MANAGE:
+    roles:
+      - name: Ops owner
+        control_ids: [SEC-HITL-001, SEC-DLQ-001, SEC-BUDGET-001]
+        owner: bobbyaqlaar@gmail.com
+evidence_artifacts:
+  - .agent-rfc/fixtures/golden_evals.json
+  - .agent-rfc/fixtures/fairness_evals.json
+  - .agent-rfc/security/risk_register.yaml
+  - .agent-rfc/security/agency_manifest.yaml

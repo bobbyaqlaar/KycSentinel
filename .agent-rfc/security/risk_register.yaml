@@ -1,0 +1,88 @@
+# KYC Sentinel — residual risk register (SEC-RISK-001).
+#
+# Seeded from the framework template (G5) then filled in with THIS app's real
+# risks. The harness validates schema, not content truth — these entries are
+# the tenant's own claims and must be reviewed by a human owner, not an agent.
+#
+# Scope note: synthetic-data testbed. A production KYC deployment would need
+# a compliance-owned register, not this one.
+version: 1
+entries:
+  - id: RISK-KYC-001
+    description: >-
+      Sanctions matching is naive substring/alias matching over a fixture
+      list, so a real-world alias or transliteration variant can be missed
+      and an applicant under-rated (demonstrated by fixture sanc-007).
+    severity: high
+    mitigations:
+      - Every HIGH rating and every judge flag routes to human review before onboarding (policy-006).
+      - Missed aliases become golden-dataset cases via the HITL promotion loop, gating all future changes.
+      - Production deployments must replace the fixture list with a licensed sanctions feed.
+    control_ids:
+      - SEC-RISK-001
+      - SEC-HITL-001
+      - SEC-EVAL-001
+
+  - id: RISK-KYC-002
+    description: >-
+      Applicant free-text can carry prompt injection aimed at lowering the
+      risk rating (fixture inj-012).
+    severity: high
+    mitigations:
+      - PROMPT_GUARD=default blocks flagged prompts before any model call.
+      - Injection cases are part of the adversarial eval suite run in CI.
+      - The pipeline routes a flagged submission to human review rather than continuing.
+    control_ids:
+      - SEC-PROMPT-001
+      - SEC-ADV-001
+      - SEC-HITL-001
+
+  - id: RISK-KYC-003
+    description: >-
+      Emirates IDs, card numbers and contact details appear in submissions
+      and would otherwise reach a cloud provider and the trace store (PDPL).
+    severity: high
+    mitigations:
+      - Pre-call input_guardrail scrubs before any provider call; counts recorded as decision evidence.
+      - Post-call trace_redactor scrubs spans; both share one Luhn validator so they cannot disagree.
+      - The intake route is a local sovereign model, so raw text never leaves the border even pre-scrub.
+    control_ids:
+      - SEC-PII-001
+      - SEC-RISK-001
+
+  - id: RISK-KYC-004
+    description: >-
+      A model can cite a policy or sanctions document that was never
+      retrieved, producing a plausible but ungrounded rationale (fixture F7).
+    severity: medium
+    mitigations:
+      - Judge agent hard-checks every citation against the retrieved set; unresolved citations block auto-approval.
+      - Hallucination eval suite gates CI via HALLUCINATION_FAIL_ABOVE.
+    control_ids:
+      - SEC-EVAL-003
+      - SEC-HITL-001
+
+  - id: RISK-KYC-005
+    description: >-
+      A protected attribute (nationality, gender) could influence the risk
+      rating, breaching Federal Decree-Law No. 34/2023 fairness duties.
+    severity: high
+    mitigations:
+      - Paired fairness fixtures with pair-parity checking, gated in CI via eval-fairness.yml.
+      - Judge agent performs a runtime parity check on paired profiles.
+    control_ids:
+      - SEC-FAIR-001
+      - SEC-EVAL-001
+
+  - id: RISK-KYC-006
+    description: >-
+      Budget exhaustion mid-batch could silently degrade the analyst to a
+      weaker model, lowering decision quality without an operator noticing.
+    severity: medium
+    mitigations:
+      - degrade_tier is recorded on every span and surfaced in the Ops Portal.
+      - The judge route has degrade_to=null so grading never silently downgrades.
+      - Monthly cap and per-call reservation are enforced atomically by the gateway.
+    control_ids:
+      - SEC-BUDGET-001
+      - SEC-AUDIT-001

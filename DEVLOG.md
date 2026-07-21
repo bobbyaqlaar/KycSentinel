@@ -172,6 +172,30 @@ analyst share a model id), E4 (security CI soft-fails — blocked on
 framework G5, which is still open: nothing seeds the tenant
 `.agent-rfc/security/` pack).
 
+## 2026-07-21 — security pack authored; CI security step is now hard-fail
+
+Framework G5 fixed upstream (`post-checkout` now seeds
+`.agent-rfc/security/` from vendored templates, never overwriting), so this
+repo no longer has an excuse for `|| true`.
+
+- Authored the four security artifacts with **this app's real content**,
+  not placeholders: `risk_register.yaml` carries six residual risks
+  (alias-miss under-rating, injection, PDPL PII exposure, ungrounded
+  citations, protected-attribute leakage, silent budget degradation), each
+  mapped to the controls that mitigate it; `agency_manifest.yaml` declares
+  `approve_activity` as the sole high-impact action requiring HITL and says
+  why the other three don't; `nist_profile.yaml` names owners and evidence
+  artifacts; `tool_allowlist.yaml` was already authored in T2.
+- **`.github/workflows/ci.yml` security step is now `--strict` with no
+  `|| true`.** Verified locally: `exit=0`.
+- `MODERATION_HOOK=optional`, not `required`, in CI — deliberately. The
+  harness runner resets the moderator and cannot observe a durable tenant
+  registration, so `required` always fails (framework G10, newly filed).
+  A real regulated deployment registers a classifier at worker startup;
+  that's a deployment-time setting, not a CI one.
+- **E4 is now closed.** Still open: E2 (Research agent makes no LLM call)
+  and E3 (judge and analyst share a model id).
+
 ---
 
 ## CI/CD (GitHub) — pending

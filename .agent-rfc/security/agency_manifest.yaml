@@ -1,0 +1,30 @@
+# KYC Sentinel — high-impact actions requiring HITL (SEC-AGENCY-001).
+# Account approval is the action with real-world consequence here: it is what
+# lets a corporate entity onboard. policy-006 makes it non-autonomous.
+version: 1
+actions:
+  - workflow: KycApplicationWorkflow
+    action: approve_activity
+    needs_hitl: true
+    notes: >-
+      Reached only after a LOW rating with a clean judge verdict, or after an
+      explicit human approval signal. HIGH ratings and judge flags always pause.
+
+  - workflow: KycApplicationWorkflow
+    action: intake_activity
+    needs_hitl: false
+    notes: >-
+      Parsing is reversible and side-effect-free. Failures park in the DLQ for
+      a human-edited payload (recoverable step) rather than a HITL gate.
+
+  - workflow: KycApplicationWorkflow
+    action: research_activity
+    needs_hitl: false
+    notes: Read-only lookups over allowlisted tools; no external side effects.
+
+  - workflow: KycApplicationWorkflow
+    action: analyst_activity
+    needs_hitl: false
+    notes: >-
+      Produces a recommendation, not a decision. Its HIGH output is precisely
+      what triggers the HITL gate on approve_activity.

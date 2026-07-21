@@ -48,9 +48,17 @@ jobs:
         run: python3 demo.py all
       - name: "Security harness (strict) against this tenant"
         working-directory: KYC_Sentinel
+        env:
+          PROMPT_GUARD: default        # enforcing; `warn` would fail --strict
+          # `optional` rather than `required`: the harness runner resets the
+          # moderator and has no way to observe a durable tenant registration,
+          # so MODERATION_HOOK=required can never pass (framework G10). A real
+          # regulated deployment registers a classifier at worker startup.
+          MODERATION_HOOK: optional
+          TOOL_ALLOWLIST_STRICT: "1"
         run: |
           pip install jsonschema
-          python3 $AGENTSMITH_DIR/scripts/run-security-checks.py --mode ci --strict || true
-          # '|| true' until the tenant's full .agent-rfc/security pack
-          # (agency manifest, NIST profile, risk register) is filled in —
-          # flip to hard-fail in the CI/CD rollout (DEVLOG pending section).
+          python3 $AGENTSMITH_DIR/scripts/run-security-checks.py --mode ci --strict
+          # Hard-fail as of 2026-07-21: the tenant .agent-rfc/security/ pack
+          # (risk register, agency manifest, NIST profile, tool allowlist) is
+          # authored, so there is nothing left to excuse with '|| true'.
