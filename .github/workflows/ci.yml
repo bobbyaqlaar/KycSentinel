@@ -50,11 +50,10 @@ jobs:
         working-directory: KYC_Sentinel
         env:
           PROMPT_GUARD: default        # enforcing; `warn` would fail --strict
-          # `optional` rather than `required`: the harness runner resets the
-          # moderator and has no way to observe a durable tenant registration,
-          # so MODERATION_HOOK=required can never pass (framework G10). A real
-          # regulated deployment registers a classifier at worker startup.
-          MODERATION_HOOK: optional
+          # `required` is now satisfiable (framework G10): tenant.yaml declares
+          # moderation.hook, so the harness imports and smoke-tests this
+          # tenant's own classifier rather than only the framework API.
+          MODERATION_HOOK: required
           TOOL_ALLOWLIST_STRICT: "1"
         run: |
           pip install jsonschema

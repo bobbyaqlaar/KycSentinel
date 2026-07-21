@@ -196,6 +196,27 @@ repo no longer has an excuse for `|| true`.
 - **E4 is now closed.** Still open: E2 (Research agent makes no LLM call)
   and E3 (judge and analyst share a model id).
 
+## 2026-07-21 — G10 fixed upstream; tenant now runs MODERATION_HOOK=required
+
+- **`agents/moderation.py`** — this tenant's real output classifier, declared
+  in `tenant.yaml` as `moderation.hook: "agents.moderation:classify_output"`.
+  The framework runtime auto-registers it AND the SEC-MOD-001 harness imports
+  and smoke-tests it, so the control now proves *this app has a working
+  classifier* rather than only that the framework API exists.
+- What it enforces, and why these two rules: (a) no Emirates ID / card number
+  in output — the input guardrail scrubs prompts, but a model can reconstruct
+  PII into the rationale a human reviewer reads, so the output side needs the
+  symmetric check; (b) no protected-attribute *justification* (policy-007) —
+  matched only in a justifying construction ("because … nationality"), not on
+  incidental mentions, so a rationale that merely names a country isn't
+  flagged. A rationale justified by nationality is a fairness breach even
+  when the rating itself is correct.
+- **CI is now `MODERATION_HOOK=required`** (was `optional` with a comment
+  explaining that `required` could never pass). Verified locally:
+  `--mode ci --strict` exits 0 with evidence *"tenant moderator declared and
+  verified (agents.moderation:classify_output)"*.
+- Suite: 25 → **35 passing** (10 classifier tests).
+
 ---
 
 ## CI/CD (GitHub) — pending

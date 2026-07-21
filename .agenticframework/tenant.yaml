@@ -18,6 +18,12 @@ gateway:
     analyst: claude-sonnet-4-6
     judge: claude-sonnet-4-6
 
+moderation:
+  # Declared so BOTH the runtime (auto-registers at first use) and the
+  # SEC-MOD-001 harness (imports + smoke-tests it) bind to the same
+  # classifier — framework G10. Lets this tenant run MODERATION_HOOK=required.
+  hook: "agents.moderation:classify_output"
+
 budget:
   monthly_usd_cap: 5            # deliberately small — F5 degrade demo fires
 
