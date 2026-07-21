@@ -17,10 +17,7 @@ from pathlib import Path
 from . import _framework
 from ._framework import REPO_ROOT
 
-try:
-    from runtime.tool_registry import ToolRegistry, ToolNotAllowedError  # noqa: F401
-except ImportError:
-    from tool_registry import ToolRegistry, ToolNotAllowedError  # type: ignore # noqa: F401
+from runtime.tool_registry import ToolRegistry, ToolNotAllowedError  # noqa: F401
 
 _CORPUS = REPO_ROOT / "corpus"
 

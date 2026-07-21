@@ -19,12 +19,8 @@ from dataclasses import dataclass
 from . import _framework  # noqa: F401
 from .models import ApplicantProfile
 
-try:
-    from runtime.input_guardrail import scrub_text
-    from runtime.structured_output import parse_llm_json, StructuredOutputError  # noqa: F401
-except ImportError:
-    from input_guardrail import scrub_text  # type: ignore
-    from structured_output import parse_llm_json, StructuredOutputError  # type: ignore # noqa: F401
+from runtime.input_guardrail import scrub_text
+from runtime.structured_output import parse_llm_json, StructuredOutputError  # noqa: F401
 
 INTAKE_PROMPT = """You are the KYC intake parser. Extract the applicant fields
 from the submission below and reply with ONLY a JSON object with keys:

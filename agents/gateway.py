@@ -30,10 +30,7 @@ from typing import Optional
 
 from . import _framework  # noqa: F401 — sys.path side effect
 
-try:
-    from runtime.testing import FakeGateway as _FrameworkFake
-except ImportError:  # pragma: no cover — flat runtime layout
-    from testing import FakeGateway as _FrameworkFake  # type: ignore
+from runtime.testing import FakeGateway as _FrameworkFake
 
 
 def fake_mode() -> bool:
@@ -116,9 +113,5 @@ def get_gateway(budget_cap_usd: Optional[float] = None):
     mode needs nothing from the provider stack."""
     if fake_mode():
         return FakeGateway()
-    try:
-        from runtime.llm_gateway import LLMGateway
-    except ImportError:  # flat layout
-        from llm_gateway import LLMGateway  # type: ignore
-
+    from runtime.llm_gateway import LLMGateway
     return LLMGateway(tenant_id="kyc-sentinel", budget_cap_usd=budget_cap_usd)

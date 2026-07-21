@@ -18,10 +18,7 @@ from ._framework import REPO_ROOT
 from .models import ApplicantProfile, ResearchFindings
 from .tools import registry
 
-try:
-    from runtime.vector_store import MemoryVectorStore
-except ImportError:
-    from vector_store import MemoryVectorStore  # type: ignore
+from runtime.vector_store import MemoryVectorStore
 
 _STORE: MemoryVectorStore | None = None
 

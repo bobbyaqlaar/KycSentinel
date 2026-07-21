@@ -27,10 +27,7 @@ import re
 
 from . import _framework  # noqa: F401 — sys.path side effect
 
-try:
-    from runtime.moderation import ModerationResult
-except ImportError:  # pragma: no cover — flat runtime layout
-    from moderation import ModerationResult  # type: ignore
+from runtime.moderation import ModerationResult
 
 # Emirates ID and card numbers must never appear in a rationale. The input
 # guardrail scrubs them from prompts; this is the symmetric output check.

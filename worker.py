@@ -14,17 +14,20 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parent / "workflows"))
 
-from agents._framework import FRAMEWORK_DIR  # noqa: E402
-
-sys.path.insert(0, str(FRAMEWORK_DIR / "runtime"))
-sys.path.insert(0, str(FRAMEWORK_DIR / "runtime" / "workflows"))
+# Resolves the framework: a no-op when agentsmith-runtime is installed, or a
+# sys.path bootstrap when AGENTSMITH_DIR points at a live checkout. Two more
+# inserts (runtime/ and runtime/workflows/) used to be needed here because the
+# runtime wasn't a package (framework G6).
+from agents import _framework  # noqa: E402,F401
 
 from temporalio.client import Client  # noqa: E402
 from temporalio.worker import Worker  # noqa: E402
 
-from base_workflow import dlq_enqueue_activity, self_correct_payload_activity  # noqa: E402
+from runtime.workflows.base_workflow import (  # noqa: E402
+    dlq_enqueue_activity,
+    self_correct_payload_activity,
+)
 from workflows.activities import (  # noqa: E402
     analyst_activity,
     approve_activity,

@@ -17,10 +17,7 @@ import logging
 from . import _framework  # noqa: F401
 from .models import ApplicantProfile, ResearchFindings, RiskAssessment
 
-try:
-    from runtime.structured_output import parse_llm_json
-except ImportError:
-    from structured_output import parse_llm_json  # type: ignore
+from runtime.structured_output import parse_llm_json
 
 logger = logging.getLogger(__name__)
 

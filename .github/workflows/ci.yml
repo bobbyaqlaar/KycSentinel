@@ -36,7 +36,10 @@ jobs:
         working-directory: KYC_Sentinel
         run: |
           pip install -r requirements.txt
-          pip install pyyaml pydantic
+          # The framework is a real dependency (framework G6) — installed from
+          # the checkout above rather than bootstrapped onto sys.path. Against
+          # a published version this becomes a pinned line in requirements.txt.
+          pip install -e "$AGENTSMITH_DIR"
       - name: "py_compile sweep"
         working-directory: KYC_Sentinel
         run: find agents workflows test -name "*.py" -print0 | xargs -0 -n1 python3 -m py_compile

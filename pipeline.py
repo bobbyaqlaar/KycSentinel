@@ -28,10 +28,7 @@ from agents.judge import run_judge
 from agents.models import JudgeVerdict, ResearchFindings, RiskAssessment
 from agents.research import run_research
 
-try:
-    from runtime.prompt_guard import scan_prompt
-except ImportError:
-    from prompt_guard import scan_prompt  # type: ignore
+from runtime.prompt_guard import scan_prompt
 
 
 @dataclass

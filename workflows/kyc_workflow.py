@@ -14,7 +14,12 @@ Framework patterns used (testbed-tenant-spec.md §2):
 
 sys.path bootstrap lives in worker.py, NOT here — Temporal's determinism
 sandbox re-imports this module and rejects Path.resolve() at module level
-(same lesson recorded in examples/oil-price-agent/worker.py).
+(same lesson recorded in examples/oil-price-agent/worker.py). Since the
+runtime became an installable package (framework G6) the base-workflow
+import is a plain `runtime.workflows.base_workflow` rather than a flat
+`base_workflow` that depended on worker.py having inserted
+`runtime/workflows/` onto sys.path first — one less ordering constraint
+between two files the sandbox re-imports independently.
 """
 
 from __future__ import annotations
@@ -25,7 +30,10 @@ from datetime import timedelta
 from temporalio import workflow
 
 with workflow.unsafe.imports_passed_through():
-    from base_workflow import AgentWorkflowResult, BaseAgentWorkflow  # noqa: F401
+    from runtime.workflows.base_workflow import (  # noqa: F401
+        AgentWorkflowResult,
+        BaseAgentWorkflow,
+    )
 
 
 @dataclass
