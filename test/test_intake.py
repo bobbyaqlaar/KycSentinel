@@ -27,10 +27,12 @@ async def test_pii_scrubbed_before_model_call(gateway):
     assert result.scrub_counts.get("emirates_id", 0) >= 1
     assert result.scrub_counts.get("card", 0) >= 1
     assert result.scrub_counts.get("email", 0) >= 1
-    prompt_seen_by_model = gateway.calls[0]["prompt"]
-    assert "784-1985-1234567-1" not in prompt_seen_by_model
-    assert "4111 1111 1111 1111" not in prompt_seen_by_model
-    assert "omar@rashidventures.example" not in prompt_seen_by_model
+    # Framework helper (runtime.testing) — asserts across every recorded call
+    gateway.assert_prompt_excludes(
+        "784-1985-1234567-1",
+        "4111 1111 1111 1111",
+        "omar@rashidventures.example",
+    )
 
 
 @pytest.mark.asyncio

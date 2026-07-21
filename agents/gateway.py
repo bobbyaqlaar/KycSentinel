@@ -1,10 +1,21 @@
 """
-agents/gateway.py — gateway factory: real AgentSmith LLMGateway, or the
-deterministic FakeGateway when KYC_FAKE_LLM=1 (RFC-002 offline mode).
+agents/gateway.py — gateway factory: real AgentSmith LLMGateway, or a
+deterministic fake when KYC_FAKE_LLM=1 (RFC-002 offline mode).
 
-FakeGateway mirrors LLMGateway.complete()'s result shape so agents are
-byte-identical in both modes. Its "model behavior" is keyed off markers in
-the prompt so F-scenarios are reproducible:
+The fake now subclasses the framework's shipped `runtime.testing.FakeGateway`
+(added as G4 *because* of this app — see TestbedFeedback-2026-07-21). Only
+the KYC-specific response scripting lives here; the CompletionResult shape,
+call recording, budget simulation, and — critically — the streaming-capability
+rules come from the framework.
+
+That last point is the lesson: this app's original hand-rolled double aliased
+`complete_stream` to `complete`, which made a real production crash invisible
+(the analyst's Anthropic route could not stream at all, G1). A double that is
+MORE capable than the real gateway hides exactly the bugs a testbed exists to
+find, so the shipped double refuses to stream what the real one can't.
+
+Response behavior is keyed off markers in the prompt so F-scenarios are
+reproducible:
   - BROKEN_JSON_TRIGGER in an intake submission → invalid JSON (F2)
   - CITE_GHOST_TRIGGER in an analyst prompt   → cites a nonexistent doc (F7)
 It never inspects fixture files — only the prompt it is given, like a model.
@@ -15,51 +26,45 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 
 from . import _framework  # noqa: F401 — sys.path side effect
 
-
-@dataclass
-class FakeResult:
-    text: str
-    model_used: str
-    input_tokens: int
-    output_tokens: int
-    cost_usd: float
-    degrade_tier: Optional[str] = None
-    ttft_ms: Optional[float] = None
+try:
+    from runtime.testing import FakeGateway as _FrameworkFake
+except ImportError:  # pragma: no cover — flat runtime layout
+    from testing import FakeGateway as _FrameworkFake  # type: ignore
 
 
 def fake_mode() -> bool:
     return os.environ.get("KYC_FAKE_LLM", "").strip() == "1"
 
 
-class FakeGateway:
-    """Deterministic stand-in for runtime/llm_gateway.LLMGateway."""
+class FakeGateway(_FrameworkFake):
+    """KYC-specific response scripting over the framework's test double.
+
+    `providers` mirrors this tenant's real models.yaml so the double
+    enforces the same streaming rules the real gateway does — the analyst
+    route is Anthropic, which the framework can now stream (G1); a route
+    pointed at a cloud-native provider would fall back here exactly as it
+    does in production.
+    """
 
     def __init__(self, tenant_id: str = "kyc-sentinel") -> None:
-        self.tenant_id = tenant_id
-        self.calls: list[dict] = []
-
-    async def complete(self, prompt: Any, model_hint: str = "developer", **kw: Any) -> FakeResult:
-        text = prompt if isinstance(prompt, str) else json.dumps(prompt)
-        self.calls.append({"model_hint": model_hint, "prompt": text})
-        out = self._respond(model_hint, text)
-        return FakeResult(
-            text=out,
-            model_used=f"fake-{model_hint}",
-            input_tokens=max(1, len(text) // 4),
-            output_tokens=max(1, len(out) // 4),
-            cost_usd=0.0,
-            ttft_ms=1.0,
+        super().__init__(
+            tenant_id=tenant_id,
+            providers={
+                "intake": "ollama",
+                "research": "groq",
+                "analyst": "anthropic",
+                "judge": "anthropic",
+            },
         )
 
-    # complete_stream shares complete()'s fake path (TTFT is faked above).
-    complete_stream = complete
+    def _resolve_text(self, call) -> str:  # framework hook
+        return self._script_response(call.model_hint, call.prompt)
 
-    def _respond(self, model_hint: str, prompt: str) -> str:
+    def _script_response(self, model_hint: str, prompt: str) -> str:
         if model_hint == "intake":
             return self._intake(prompt)
         if model_hint == "analyst":

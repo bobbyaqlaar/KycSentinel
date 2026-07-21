@@ -43,7 +43,7 @@ async def test_clean_profile_rates_low_and_judge_passes(gateway):
     verdict = await run_judge(gateway, assessment, findings)
     assert not verdict.flagged
     # judge critique went to the judge route, not the analyst's (RFC-002)
-    assert gateway.calls[-1]["model_hint"] == "judge"
+    assert gateway.calls[-1].model_hint == "judge"
 
 
 def test_citation_outside_retrieved_set_flags():
@@ -76,7 +76,7 @@ async def test_analyst_survives_provider_without_streaming(gateway):
     findings = await run_research(gateway, p)
     assessment = await run_analyst(gateway, p, findings)
     assert assessment.rating == "LOW"
-    assert gateway.calls[-1]["model_hint"] == "analyst"  # fell back on the same route
+    assert gateway.calls[-1].model_hint == "analyst"  # fell back on the same route
 
 
 def test_parity_check():

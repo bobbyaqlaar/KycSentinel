@@ -142,6 +142,36 @@ Full write-up: `AgenticFramework/TestbedFeedback-2026-07-21.md`.
   nothing seeds those templates into a tenant repo today).
 - Suite after the fix: **25 tests pass**, all eight F-scenarios still fire.
 
+## 2026-07-21 — framework fixes landed; tenant adopts them
+
+AgentSmith G1–G4 fixed upstream (framework suite 170 → 198 passing). This
+repo now consumes them:
+
+- **`agents/gateway.py` rewritten to subclass `runtime.testing.FakeGateway`.**
+  ~60 lines of hand-rolled double → ~45 lines of KYC-specific scripting;
+  the CompletionResult shape, call recording, budget simulation and
+  streaming rules now come from the framework. `providers={...}` mirrors
+  this tenant's real `models.yaml`, so the double enforces the same
+  streaming capability the real gateway has.
+- Integration friction worth remembering: the tenant's `_respond()` helper
+  collided with the framework double's internal method of the same name.
+  Fixed upstream by renaming the internal one `_build_result()` and
+  documenting `_resolve_text(call)` as the single override hook — a shipped
+  base class needs an unambiguous extension point.
+- `test/test_intake.py` now uses the framework's `assert_prompt_excludes()`
+  helper: "PII never reached the model" is one line and checks every
+  recorded call, not just `calls[0]`.
+- E1's fallback shim in `agents/analyst.py` **stays** even though the
+  framework now streams Anthropic — the analyst route is tenant-configurable
+  and could be pointed at a cloud-native provider tomorrow, where the
+  framework falls back to `complete()` and reports `ttft_ms=None`.
+- Suite still 25 passing; all eight F-scenarios still fire.
+
+**Still open here:** E2 (Research agent makes no LLM call), E3 (judge and
+analyst share a model id), E4 (security CI soft-fails — blocked on
+framework G5, which is still open: nothing seeds the tenant
+`.agent-rfc/security/` pack).
+
 ---
 
 ## CI/CD (GitHub) — pending
