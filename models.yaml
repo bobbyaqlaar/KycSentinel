@@ -21,7 +21,11 @@ models:
     cost_per_output_token: 0.000015
     degrade_to: research        # F5: frontier → groq → local
   judge:
-    id: claude-sonnet-4-6
+    # Distinct from the analyst (E3 / RFC-002): the model grading a rationale
+    # must be independent of the one that wrote it, or "judge/actor
+    # separation" is a slogan, not a control. A rationale's own author is the
+    # worst-placed reviewer of its soundness.
+    id: claude-opus-4-8
     provider: anthropic
     cost_per_input_token: 0.000003
     cost_per_output_token: 0.000015

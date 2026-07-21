@@ -217,6 +217,31 @@ repo no longer has an excuse for `|| true`.
   verified (agents.moderation:classify_output)"*.
 - Suite: 25 → **35 passing** (10 classifier tests).
 
+## 2026-07-21 — E2/E3 closed: all four routes real, judge independent
+
+- **E2** — the Research agent now makes its own `model_hint="research"` call
+  (the Groq cheap tier): a one-line factual screening brief over the
+  collected evidence, stored on `ResearchFindings.screening_summary`. It is
+  NOT a rating — the tool findings still drive the decision, and a
+  summary-call failure degrades to a deterministic brief rather than
+  aborting the application. `demo.py f5` now prints
+  `routes actually used this run: ['intake', 'research', 'analyst', 'judge']`
+  — all four, not three plus a degrade target.
+- **E3** — judge split onto a distinct model: analyst `claude-sonnet-4-6`,
+  judge `claude-opus-4-8`. A rationale's own author is the worst-placed
+  reviewer of its soundness, so "judge/actor separation" needed to be a
+  config fact, not a slogan. The framework gained
+  `runtime.judging.judge_independence_warning`; the tenant judge calls it
+  once against the merged registry and logs if the two ever collapse to one
+  id. A tenant test forces that misconfiguration and asserts the warning
+  fires (proving the wiring, not just the helper).
+- Suite: 36 → **39 passing**; all eight F-scenarios still fire; strict
+  security harness still exits 0.
+
+**KYC Sentinel is now feature-complete against its spec** (all 5 agents /
+4 routes / F1–F8 real). Remaining work is deployment only — the sections
+below.
+
 ---
 
 ## CI/CD (GitHub) — pending

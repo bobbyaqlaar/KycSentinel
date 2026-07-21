@@ -35,6 +35,10 @@ class ResearchFindings(BaseModel):
     adverse_media: list[str] = []
     retrieved_doc_ids: list[str] = []
     retrieved_snippets: list[str] = []
+    # One-line factual screening brief produced by the Research agent's own
+    # LLM call (the Groq cheap-tier route). Not a rating — the Analyst decides
+    # that; this just summarises what screening turned up for the reviewer.
+    screening_summary: str = ""
 
 
 class RiskAssessment(BaseModel):

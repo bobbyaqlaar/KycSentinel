@@ -95,8 +95,10 @@ async def f5() -> str:
     print("   try_reserve fails mid-batch and _resolve_role walks analyst →")
     print("   research → intake; spans record degrade_tier. Fake mode records")
     print("   the route decision only:")
-    decision = await process_application(get_gateway(), _sub("clean-001"))
+    gw = get_gateway()
+    decision = await process_application(gw, _sub("clean-001"))
     print(f"   clean-001 → {decision.rating} via analyst route (outcome {decision.outcome})")
+    print(f"   routes actually used this run: {gw.routes_used()}")
     return "degrade_ladder"
 
 

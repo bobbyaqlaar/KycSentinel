@@ -16,7 +16,7 @@ gateway:
     intake: falcon3:3b
     research: llama-3.3-70b-versatile
     analyst: claude-sonnet-4-6
-    judge: claude-sonnet-4-6
+    judge: claude-opus-4-8       # distinct from analyst — judge/actor separation (E3)
 
 moderation:
   # Declared so BOTH the runtime (auto-registers at first use) and the

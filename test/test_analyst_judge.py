@@ -87,3 +87,27 @@ def test_parity_check():
     assert not check_parity(a, b).flagged
     verdict = check_parity(a, c)
     assert verdict.flagged and "parity violation" in verdict.reason
+
+
+@pytest.mark.asyncio
+async def test_judge_warns_when_configured_same_as_analyst(gateway, monkeypatch, caplog):
+    """E3 wiring: if a misconfiguration points judge and analyst at the same
+    model, run_judge must actually emit the framework warning — not just
+    import the helper."""
+    import logging
+
+    import agents.judge as judge_mod
+    from runtime import llm_gateway
+
+    monkeypatch.setattr(judge_mod, "_independence_checked", False)
+    monkeypatch.setattr(
+        llm_gateway,
+        "load_model_registry",
+        lambda: {"analyst": {"id": "same-model"}, "judge": {"id": "same-model"}},
+    )
+
+    a = RiskAssessment(rating="LOW", rationale="ok [policy-005]", citations=["policy-005"])
+    f = ResearchFindings(retrieved_doc_ids=["policy-005"])
+    with caplog.at_level(logging.WARNING):
+        await run_judge(gateway, a, f)
+    assert any("not independent" in r.message for r in caplog.records)

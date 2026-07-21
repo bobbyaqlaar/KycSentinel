@@ -18,7 +18,34 @@ from .models import JudgeVerdict, ResearchFindings, RiskAssessment
 # Framework judge primitives (G7): the same citation-grounding and
 # pair-parity logic the CI eval suites use, so this per-request enforcement
 # and the eval gate cannot drift.
-from runtime.judging import citations_grounded, parity_violation
+from runtime.judging import (
+    citations_grounded,
+    parity_violation,
+    warn_if_judge_not_independent,
+)
+
+_independence_checked = False
+
+
+def _check_independence() -> None:
+    """Warn once if the judge and analyst resolve to the same model (E3).
+    Reads the merged registry (framework defaults ← models.yaml ←
+    tenant.yaml overrides), so it reflects what the gateway will actually
+    route, not just what this file assumes."""
+    global _independence_checked
+    if _independence_checked:
+        return
+    _independence_checked = True
+    try:
+        from runtime.llm_gateway import load_model_registry
+
+        reg = load_model_registry()
+        warn_if_judge_not_independent(
+            (reg.get("analyst") or {}).get("id"),
+            (reg.get("judge") or {}).get("id"),
+        )
+    except Exception:  # fail-open: an advisory check must never break judging
+        pass
 
 
 def check_citations(assessment: RiskAssessment, findings: ResearchFindings) -> JudgeVerdict:
@@ -45,6 +72,7 @@ async def run_judge(
     assessment: RiskAssessment,
     findings: ResearchFindings,
 ) -> JudgeVerdict:
+    _check_independence()
     verdict = check_citations(assessment, findings)
     if verdict.flagged:
         return verdict

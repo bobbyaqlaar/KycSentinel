@@ -64,6 +64,8 @@ class FakeGateway(_FrameworkFake):
     def _script_response(self, model_hint: str, prompt: str) -> str:
         if model_hint == "intake":
             return self._intake(prompt)
+        if model_hint == "research":
+            return self._research(prompt)
         if model_hint == "analyst":
             return self._analyst(prompt)
         if model_hint == "judge":
@@ -74,6 +76,18 @@ class FakeGateway(_FrameworkFake):
     def _field(prompt: str, label: str) -> str:
         m = re.search(rf"{label}\s*[:=]\s*(.+)", prompt, re.IGNORECASE)
         return m.group(1).strip() if m else ""
+
+    def _research(self, prompt: str) -> str:
+        # Deterministic one-line screening brief from the evidence the agent
+        # embedded in the prompt — mirrors how the real Groq model is asked.
+        hits = self._field(prompt, "sanctions_hits")
+        media = self._field(prompt, "adverse_media_count") or "0"
+        sof = self._field(prompt, "source_of_funds") or "unknown"
+        has_hits = hits not in ("", "none", "[]", "None")
+        return (
+            f"Screening: {'sanctions match present' if has_hits else 'no sanctions match'}, "
+            f"{media} adverse media item(s), source of funds {sof}."
+        )
 
     def _intake(self, prompt: str) -> str:
         if "BROKEN_JSON_TRIGGER" in prompt:

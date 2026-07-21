@@ -7,9 +7,9 @@ Four model routes, chosen so multi-LLM is structural, not cosmetic:
 | Agent | Route | Why |
 |---|---|---|
 | Intake | `falcon3:3b` @ Ollama | Sovereign/in-border: raw PII text is parsed locally; the scrub runs before ANY cloud call. `degrade_to: null` — a PII route must never fail over to a cloud model. |
-| Research | Groq Llama | High-volume retrieval + tool loops on the cheap tier. |
-| Analyst | Claude Sonnet (frontier) | The one expensive judgment call; streamed (`complete_stream`, TTFT budget); degrade ladder → research → intake (F5). |
-| Judge | `AGENT_JUDGE_MODEL` (Claude) | Judge/actor separation: the model grading rationale quality is routed independently of the model that wrote it. `degrade_to: null` — a silently downgraded judge is worse than a failed one. |
+| Research | `llama-3.3-70b` @ Groq | High-volume retrieval + tool loops on the cheap tier, **plus its own one-line screening-summary LLM call** so the route is genuinely exercised, not only a degrade target (E2). |
+| Analyst | `claude-sonnet-4-6` (frontier) | The one expensive judgment call; streamed (`complete_stream`, TTFT budget); degrade ladder → research → intake (F5). |
+| Judge | `claude-opus-4-8` (frontier, **distinct from Analyst**) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). The framework logs a warning (`runtime.judging.judge_independence_warning`) if the two ever resolve to the same id. `degrade_to: null` — a silently downgraded judge is worse than a failed one. |
 
 ## Offline mode
 
