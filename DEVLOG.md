@@ -98,6 +98,50 @@ deployment) append below — never rewrite earlier entries.
   framework checkout step — see file comments. NOT yet pushed to GitHub;
   see the CI/CD section placeholder below.
 
+## 2026-07-21 — T1–T3 complete, committed
+
+- Verified offline: **24/24 tests pass**, `demo.py all` fires all eight
+  controls (`recoverable_step, self_correction, prompt_guard,
+  tool_allowlist, degrade_ladder, fairness_parity, hallucination_gate,
+  pii_scrub`). F8 scrub counts observed: `emirates_id: 1, email: 1, card: 1`.
+- Initial commit on `main` (Conventional Commits + RFC reference — the
+  machine-installed AgentSmith hooks will police subsequent commits once
+  this repo is opted in on a provisioned machine; `.agenticframework/enabled`
+  is already present).
+- Remaining before "live": run `worker.py` against real Temporal + Postgres
+  + Phoenix (README "Running live"), then the GitHub push + CI rollout
+  below. The security-harness CI step is soft (`|| true`) until the tenant
+  `.agent-rfc/security/` pack (agency manifest, NIST profile, risk
+  register) is authored — flip to hard-fail then.
+
+## 2026-07-21 — post-build review: what the testbed found
+
+Full write-up: `AgenticFramework/TestbedFeedback-2026-07-21.md`.
+
+- **The testbed earned its keep on day one.** Building this app surfaced a
+  High-severity framework gap that no unit test could have caught:
+  `complete_stream()` raises `NotImplementedError` for `anthropic` and all
+  cloud-native providers, so the TTFT budget cannot apply to the frontier
+  model on the latency-critical path — the single most likely production
+  shape. Two individually-tested features (TTFT streaming, frontier
+  routing) are incompatible when combined; only an integration app
+  combines them.
+- **E1 FIXED:** `agents/analyst.py` now streams when the provider supports
+  it and falls back to `complete()` otherwise (streaming is a latency
+  optimisation, never a correctness requirement). Regression test added —
+  note the `FakeGateway` had *masked* the bug by aliasing `complete_stream`
+  to `complete`, so the test forces the real failure mode explicitly.
+  **Lesson for this repo: a test double that is more capable than the real
+  thing hides exactly the bugs the testbed exists to find.**
+- **Open tenant items** (tracked in the feedback report §C):
+  E2 Research agent makes no LLM call (`del gateway`) so the Groq route is
+  only a degrade target — give it a real triage call; E3 `judge` and
+  `analyst` share a model id, contradicting RFC-002's judge/actor
+  separation; E4 CI security step stays `|| true` until the tenant
+  `.agent-rfc/security/` pack is authored (blocked on framework G5 —
+  nothing seeds those templates into a tenant repo today).
+- Suite after the fix: **25 tests pass**, all eight F-scenarios still fire.
+
 ---
 
 ## CI/CD (GitHub) — pending

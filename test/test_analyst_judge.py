@@ -57,6 +57,28 @@ def test_citation_outside_retrieved_set_flags():
     assert check_citations(none, findings).flagged  # uncited rationale is also flagged
 
 
+@pytest.mark.asyncio
+async def test_analyst_survives_provider_without_streaming(gateway):
+    """E1 regression (TestbedFeedback G1): the framework's complete_stream
+    raises NotImplementedError for anthropic/cloud-native providers — the
+    analyst's own route. Losing TTFT must not lose the assessment.
+
+    The FakeGateway aliases complete_stream to complete, which is exactly
+    why the original bug was invisible offline; this test forces the real
+    failure mode instead of trusting the double."""
+
+    async def _no_streaming(*a, **k):
+        raise NotImplementedError("complete_stream supports OpenAI-compatible providers only; got 'anthropic'")
+
+    gateway.complete_stream = _no_streaming
+
+    p = _profile()
+    findings = await run_research(gateway, p)
+    assessment = await run_analyst(gateway, p, findings)
+    assert assessment.rating == "LOW"
+    assert gateway.calls[-1]["model_hint"] == "analyst"  # fell back on the same route
+
+
 def test_parity_check():
     """F6 hard check."""
     a = RiskAssessment(rating="LOW", rationale="r", citations=[])
