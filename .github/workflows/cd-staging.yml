@@ -35,6 +35,7 @@ jobs:
     environment: staging
     permissions:
       contents: read
+      id-token: write   # required for WIF's OIDC token exchange
 
     steps:
       - name: Checkout
