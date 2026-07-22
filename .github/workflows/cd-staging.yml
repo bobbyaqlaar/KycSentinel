@@ -1,0 +1,70 @@
+# KYC Sentinel — staging smoke deploy (GCP Cloud Run Job).
+# tenant.id: kyc-sentinel
+#
+# Scope, deliberately: worker.py is a Temporal poller with no HTTP listener
+# and no standalone-run mode — it connects to Temporal on startup and there
+# is no Temporal/Postgres/Ollama/Phoenix stack in the kycsentinel GCP
+# project yet (that's the "Running live" section of README.md, still
+# pending — see DEVLOG.md "Deployment — pending"). Standing up that whole
+# stack is a separate, bigger decision.
+#
+# What THIS workflow proves instead: the deploy pipeline itself — GCP auth
+# via WIF, building this repo's own Dockerfile (which now installs
+# agentsmith-runtime from the pushed AgentSmith repo, framework G6) on Cloud
+# Build, and running the actual KYC Sentinel pipeline (demo.py's F1-F8
+# drivers, same fake-gateway mode CI uses) as a Cloud Run Job. Once real
+# Temporal/Postgres/backends exist, swap this job for a `gcloud run deploy`
+# of worker.py as a long-running service (OPERATIONS.md §4).
+
+name: "CD: Staging Smoke Deploy"
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch: {}
+
+concurrency:
+  group: cd-staging-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: "Deploy + run smoke job on Cloud Run"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: staging
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Authenticate to GCP"
+        uses: ./.github/actions/gcp-auth
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      # Builds this repo's own Dockerfile via Cloud Build (no Artifact
+      # Registry image managed by hand) and deploys it as a Cloud Run Job —
+      # a batch run, not a Service, since demo.py exits when done and there
+      # is nothing here to serve HTTP traffic.
+      - name: "Deploy smoke-test Cloud Run Job"
+        run: |
+          gcloud run jobs deploy kyc-sentinel-smoke \
+            --source . \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region us-central1 \
+            --command python3 \
+            --args demo.py,all \
+            --set-env-vars KYC_FAKE_LLM=1,ENVIRONMENT=staging \
+            --task-timeout=600 \
+            --max-retries=0
+
+      - name: "Execute job and wait for result"
+        run: |
+          gcloud run jobs execute kyc-sentinel-smoke \
+            --project "${{ secrets.GCP_PROJECT_ID }}" \
+            --region us-central1 \
+            --wait

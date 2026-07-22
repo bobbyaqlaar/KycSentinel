@@ -18,6 +18,11 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# git is required for pip to clone the agentsmith-runtime git+https dependency
+# below (python:3.11-slim doesn't ship it).
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 # Dependency layer first so source edits don't invalidate the pip cache.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

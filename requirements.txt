@@ -1,14 +1,13 @@
 # KYC Sentinel tenant deps.
 #
 # The AgentSmith runtime is a real dependency now (framework G6) rather than
-# something bootstrapped onto sys.path. Pin it by tag/sha for reproducible
-# builds; `pip install -e ../AgenticFramework` for local development.
-#
-#   agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@v1.0.0
-#
-# Left commented while the framework repo is local-only — CI installs it from
-# the checked-out framework path (see .github/workflows/ci.yml).
-# agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@v1.0.0
+# something bootstrapped onto sys.path. Now that both repos are on GitHub,
+# pin to `main` (no release tag exists yet — retarget to a `vX.Y.Z` tag/sha
+# once the framework cuts one, for reproducible builds). CI still installs
+# from the checked-out framework path (see .github/workflows/ci.yml); this
+# line is what a standalone `docker build` / Cloud Run `--source` deploy
+# resolves instead, since those only have this repo's own tree to work with.
+agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@main
 
 # Direct deps of this app's own code (the runtime brings its own).
 pydantic>=2.0,<3.0
