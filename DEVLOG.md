@@ -244,15 +244,79 @@ below.
 
 ---
 
-## CI/CD (GitHub) — pending
+## 2026-07-22 — pushed to GitHub, CI green
 
-_To append when the repo is pushed: repo creation, Actions run links,
-eval-scorecard/fairness/hallucination/security gate results, staging
-deploy via cd-staging.yml, WIF setup notes._
+- Repo pushed to `github.com/bobbyaqlaar/KycSentinel` (was local-only).
+  First CI run failed: `ci.yml` checks out `bobbyaqlaar/AgentSmith` and
+  `pip install -e`s it, but the framework's own `main` (which has the G6
+  packaging commit adding `pyproject.toml`) had never been pushed to
+  GitHub — 8 local commits sat unpushed on the framework side. Pushed
+  `AgentSmith` main, reran: **CI green**
+  ([run](https://github.com/bobbyaqlaar/KycSentinel/actions/runs/29955428301)).
+- Eval-scorecard/fairness/hallucination gates are not yet wired as
+  separate CI jobs for this tenant — `ci.yml` today runs unit tests +
+  F-scenario drivers + the strict security harness only. Adding the
+  reusable `eval-*.yml` callers is follow-up work, not blocking.
 
-## Deployment — pending
+## 2026-07-22 — GCP staging smoke deploy (Cloud Run Job)
 
-_To append at deploy time: Cloud Run (or on-prem overlay) details, Phoenix
-/ Ops Portal wiring, widget embed, first HITL round-trip evidence,
-shadow-eval sampling turn-on, promotion-loop first golden case from
-production._
+**Scope decision:** `worker.py` is a Temporal poller with no HTTP listener
+and no standalone-run mode — it connects to Temporal at startup. Standing
+up the full "Running live" stack (Temporal, Postgres, Ollama for the
+sovereign `intake` route, Phoenix, real Anthropic/Groq keys) in the new
+`kycsentinel` GCP project is a separate, bigger decision, deferred. This
+pass proves the **deploy pipeline** end-to-end instead: WIF auth, this
+repo's own Dockerfile building on Cloud Build, and the actual pipeline
+(`demo.py`'s F1–F8 drivers, `KYC_FAKE_LLM=1` — same fake gateway CI uses)
+executing as a **Cloud Run Job** in `kycsentinel`.
+
+- **GCP project:** `kycsentinel` (number `857211089844`), region
+  `us-central1`. APIs enabled: Cloud Run, Cloud Build, Artifact Registry,
+  IAM, IAM Credentials, STS, Cloud Resource Manager.
+- **WIF:** `github-actions-pool` / `github-provider`, attribute-condition
+  scoped to `assertion.repository=='bobbyaqlaar/KycSentinel'`. SA
+  `github-deployer@kycsentinel.iam.gserviceaccount.com` holds
+  `roles/run.admin`, `roles/artifactregistry.writer`,
+  `roles/iam.serviceAccountUser`, `roles/cloudbuild.builds.editor`,
+  `roles/storage.admin`.
+- **Two real gaps found and fixed along the way** (both are permanent
+  fixes, not deploy-only workarounds):
+  1. `requirements.txt` had the `agentsmith-runtime` git dependency
+     **commented out** (no `v1.0.0` tag exists yet to pin to), so a
+     standalone `docker build` — exactly what Cloud Run `--source` deploy
+     does — installed no framework at all. Repointed to `@main`.
+  2. The `python:3.11-slim` base image has no `git`, which pip needs to
+     clone that dependency. Added `apt-get install git` as a Dockerfile
+     layer. Verified locally (`docker build` + `docker run ... demo.py
+     all`) before pushing to CI, both green.
+  3. **GCP-side, discovered live:** new projects no longer auto-grant the
+     default compute service account (`857211089844-compute@developer...`)
+     any project roles. Cloud Run's `--source` deploy uses that SA under
+     the hood via Cloud Build; it had zero permissions and failed reading
+     its own source-upload bucket (`storage.objects.get` denied). Granted
+     it `roles/storage.objectViewer`, `roles/artifactregistry.writer`,
+     `roles/logging.logWriter`. Also had to pre-create the
+     `cloud-run-source-deploy` Artifact Registry repo by hand — the
+     `github-deployer` SA has `artifactregistry.writer`, not `.admin`, so
+     it can't auto-create repos (deliberate least-privilege choice over
+     widening the role).
+- **`.github/workflows/cd-staging.yml`** (new) + **`.github/actions/gcp-auth`**
+  (vendored from the framework, unmodified) — `staging` GitHub Environment
+  created with `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_SERVICE_ACCOUNT`,
+  `GCP_PROJECT_ID` secrets.
+- **Result:** Cloud Run Job `kyc-sentinel-smoke` deployed and executed —
+  `EXECUTION_SUCCEEDED`, all eight F-scenarios fired, `Container called
+  exit(0)`
+  ([run](https://github.com/bobbyaqlaar/KycSentinel/actions/runs/29956358039)).
+  Verified via `gcloud logging read` against the job's own Cloud Logging
+  output, not just the GitHub Actions log.
+
+**Still open — the actual "Running live" milestone:** Cloud SQL
+(`BUDGET_BACKEND=postgres`), a Temporal server, Ollama for the sovereign
+`intake` route, Phoenix, and real Anthropic/Groq API keys (user declined
+to wire these in this pass — deferred). Once those exist, swap
+`cd-staging.yml`'s Cloud Run Job for a `gcloud run deploy` of `worker.py`
+as a long-running service (`--no-cpu-throttling --min-instances=1`,
+OPERATIONS.md §4), point it at the real `TEMPORAL_ADDRESS`, and pick up
+from there: Phoenix/Ops Portal wiring, widget embed, first HITL
+round-trip, shadow-eval sampling turn-on, first production golden case.
