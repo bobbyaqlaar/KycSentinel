@@ -15,6 +15,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+# Resolves the framework the same way worker.py does: a no-op when
+# agentsmith-runtime is installed, or a sys.path bootstrap when
+# AGENTSMITH_DIR points at a live checkout. Without this import,
+# `workflows.kyc_workflow`'s own `from runtime...` import fails whenever
+# the runtime isn't pip-installed — this script has no worker.py-equivalent
+# entrypoint to inherit the bootstrap from, so it needs its own.
+from agents import _framework  # noqa: E402,F401
+
 from temporalio.client import Client  # noqa: E402
 
 from workflows.kyc_workflow import KycApplicationWorkflow, KycWorkflowInput  # noqa: E402

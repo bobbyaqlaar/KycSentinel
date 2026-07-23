@@ -18,7 +18,12 @@ class ApplicantProfile(BaseModel):
     company_name: str
     role: str
     source_of_funds: Optional[str] = None
-    notes: str = ""
+    # Optional, not str="" — small local models (Falcon 3 on the sovereign
+    # intake route) routinely emit an explicit `"notes": null` for "nothing
+    # to add" rather than omitting the key, and that used to fail schema
+    # validation on a genuinely clean submission (found running this
+    # tenant's Intake agent live against real Ollama, not a scripted case).
+    notes: Optional[str] = None
 
     @field_validator("dob")
     @classmethod

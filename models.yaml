@@ -27,6 +27,21 @@ models:
     # worst-placed reviewer of its soundness.
     id: claude-opus-4-8
     provider: anthropic
+    # Own Anthropic account/key, not just a different model id — extends
+    # judge/actor separation to billing too, so a credit exhaustion or rate
+    # limit on the analyst's account can't also silently take out the judge.
+    # Falls back to ANTHROPIC_API_KEY (framework runtime/llm_gateway.py
+    # _lookup_api_key) if this isn't set, so it's opt-in, not a hard
+    # requirement — set ANTHROPIC_API_KEY_JUDGE in your shell to use it.
+    api_key_env: ANTHROPIC_API_KEY_JUDGE
     cost_per_input_token: 0.000003
     cost_per_output_token: 0.000015
-    degrade_to: null            # judge must not silently downgrade
+    # Availability wins over strict separation when judge's own tier is
+    # down: degrades through the same research -> intake chain analyst
+    # uses, rather than hard-failing the whole application. The framework
+    # gateway already logs every degrade ("Degraded from %r to %r due to
+    # provider error") — nothing silent about it, and
+    # runtime.judging.warn_if_judge_not_independent still checks the
+    # MERGED registry, so a degrade that ever collapses judge and analyst
+    # onto the same model is still caught and logged, just not blocked.
+    degrade_to: research

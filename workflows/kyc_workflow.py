@@ -70,7 +70,20 @@ class KycApplicationWorkflow(BaseAgentWorkflow):
         }
         # F2: one corrected retry for broken analyst JSON, then human DLQ.
         if input.self_correct:
-            analysis = await self.run_with_self_correction("analyst_activity", analyst_input)
+            analysis = await self.run_with_self_correction(
+                "analyst_activity",
+                analyst_input,
+                tenant_id=input.tenant_id,
+                gate_id="analyst-json",
+                reason="analyst_validation_error",
+                # Retry on the Analyst's OWN model tier, not the framework's
+                # generic "developer" default (gpt-4o/OpenAI) — this tenant
+                # never configures OPENAI_API_KEY, and correcting the
+                # Analyst's broken JSON with a different, unrelated model
+                # than the one that wrote it defeats the point of a
+                # same-model retry.
+                model_hint="analyst",
+            )
         else:
             analysis = await workflow.execute_activity(
                 "analyst_activity",
