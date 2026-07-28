@@ -28,7 +28,12 @@ from agents.judge import run_judge
 from agents.models import JudgeVerdict, ResearchFindings, RiskAssessment
 from agents.research import run_research
 
-from runtime.prompt_guard import scan_prompt
+from runtime.prompt_guard import (
+    PromptGuardBlockedError,
+    PromptGuardResult,
+    apply_prompt_guard,
+    is_enforcing,
+)
 from runtime.tracing import agent_span
 
 
@@ -46,8 +51,25 @@ class Decision:
 
 
 async def process_application(gateway, submission: str, analyst_extra: str = "") -> Decision:
-    guard = scan_prompt(submission)
-    if guard.blocked:
+    # apply_prompt_guard, not scan_prompt: scan_prompt always reports
+    # blocked=True on a hit regardless of PROMPT_GUARD, so calling it directly
+    # made this front door ignore the mode contract entirely — PROMPT_GUARD=off
+    # still blocked, and `warn` (the observe-first tier the framework added in
+    # G9 precisely so a guard can be rolled out against real traffic before it
+    # enforces) was unusable here. is_enforcing() is the framework's single
+    # definition of "blocking", shared with the gateway and the SEC-PROMPT-001
+    # harness, so this check and the gateway's cannot disagree about whether
+    # the guard is on.
+    # PROMPT_GUARD=strict raises from inside apply_prompt_guard rather than
+    # returning a blocked result (that is the difference between strict and
+    # default). Catching it here keeps the outcome identical to default mode —
+    # a flagged submission is a human-review case, not a crashed application.
+    try:
+        guard = apply_prompt_guard([{"role": "user", "content": submission}])
+    except PromptGuardBlockedError as exc:
+        guard = PromptGuardResult(blocked=True, reasons=list(exc.reasons))
+
+    if guard.blocked and is_enforcing():
         # F3: injection attempts route straight to human review, flagged —
         # the pipeline never lets the embedded instruction reach the analyst.
         return Decision(
@@ -58,6 +80,10 @@ async def process_application(gateway, submission: str, analyst_extra: str = "")
         )
 
     tenant = getattr(gateway, "tenant_id", "kyc-sentinel")
+    # In warn mode the call proceeds, but the findings still ride along on the
+    # Decision — observe-first is only useful if you can actually see what
+    # would have been blocked.
+    guard_reasons = list(guard.reasons)
 
     # Each step gets its own span (framework G8) so the non-LLM work — scrub
     # counts, tool calls (auto-annotated by ToolRegistry.invoke), the judge
@@ -89,6 +115,7 @@ async def process_application(gateway, submission: str, analyst_extra: str = "")
         rating=assessment.rating,
         rationale=assessment.rationale,
         scrub_counts=intake.scrub_counts,
+        guard_reasons=guard_reasons,
         verdict=verdict,
         assessment=assessment,
         findings=findings,

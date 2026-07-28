@@ -24,11 +24,32 @@ _CORPUS = REPO_ROOT / "corpus"
 registry = ToolRegistry(
     allowlist_path=REPO_ROOT / ".agent-rfc" / "security" / "tool_allowlist.yaml",
     strict=True,
+    # So the `agent.tool.*` spans this registry emits carry tenant.id like
+    # every other span — otherwise tool calls vanish from a per-tenant Phoenix
+    # filter (framework fix, same pass as the HITL gate).
+    tenant_id="kyc-sentinel",
 )
 
 
+_CORPUS_CACHE: dict[str, list[dict]] = {}
+
+
 def _load(name: str) -> list[dict]:
-    return json.loads((_CORPUS / name).read_text(encoding="utf-8"))
+    """Corpus file, parsed once per process.
+
+    These are static synthetic fixtures, but _load used to re-read and
+    re-parse from disk on every call — and run_research invokes
+    sanctions_lookup twice (person + company) and adverse_media_search twice
+    per application, so F5's 30-application batch did 120 reads and 120
+    json.loads of files that never change. agents/research.py's policy_store()
+    already caches its corpus this way; this is the same pattern for the
+    tool-backing fixtures.
+    """
+    cached = _CORPUS_CACHE.get(name)
+    if cached is None:
+        cached = json.loads((_CORPUS / name).read_text(encoding="utf-8"))
+        _CORPUS_CACHE[name] = cached
+    return cached
 
 
 def _sanctions_lookup(name: str) -> list[dict]:

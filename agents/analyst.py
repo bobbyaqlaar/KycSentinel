@@ -12,14 +12,10 @@ F2 self-correction trigger, so it propagates.
 
 from __future__ import annotations
 
-import logging
-
 from . import _framework  # noqa: F401
 from .models import ApplicantProfile, ResearchFindings, RiskAssessment
 
 from runtime.structured_output import parse_llm_json
-
-logger = logging.getLogger(__name__)
 
 ANALYST_PROMPT = """You are the KYC risk analyst. Apply the retrieved policies to
 the evidence and reply with ONLY JSON: {{"rating": "LOW|MEDIUM|HIGH",
@@ -51,26 +47,16 @@ async def run_analyst(
         docs=" ".join(f"[{d}]" for d in findings.retrieved_doc_ids),
         extra=extra_context,
     )
-    result = await _complete_maybe_stream(gateway, prompt)
+    # complete_stream handles the non-streaming providers itself now: it falls
+    # back to complete() internally with ttft_ms=None rather than raising
+    # (framework G1, CHANGELOG [Unreleased]). A local `except
+    # NotImplementedError` shim used to sit here for that; it became
+    # unreachable in both real and fake mode — runtime.testing.FakeGateway
+    # defaults stream_fallback=True — while its comment still asserted the
+    # gateway "raises NotImplementedError for 'anthropic'", which is now the
+    # opposite of the truth. Dead code with a confidently wrong comment is
+    # worse than no comment.
+    result = await gateway.complete_stream(
+        prompt, model_hint="analyst", max_tokens=1024, temperature=0.1
+    )
     return parse_llm_json(result.text, RiskAssessment)
-
-
-async def _complete_maybe_stream(gateway, prompt: str):
-    """Stream when the analyst's provider supports it, else fall back.
-
-    TestbedFeedback-2026-07-21 G1/E1: the framework's complete_stream()
-    raises NotImplementedError for 'anthropic' and every cloud-native
-    provider — i.e. for exactly the frontier model this route uses. Fake
-    mode masked it, so the crash would only have appeared in production.
-    Streaming is a latency optimisation, never a correctness requirement:
-    losing ttft_ms must not lose the assessment. Remove this shim once the
-    gateway streams Anthropic (or falls back internally)."""
-    try:
-        return await gateway.complete_stream(
-            prompt, model_hint="analyst", max_tokens=1024, temperature=0.1
-        )
-    except NotImplementedError as exc:
-        logger.info("analyst provider does not support streaming (%s); TTFT unavailable", exc)
-        return await gateway.complete(
-            prompt, model_hint="analyst", max_tokens=1024, temperature=0.1
-        )

@@ -43,6 +43,16 @@ jobs:
       - name: "py_compile sweep"
         working-directory: KYC_Sentinel
         run: find agents workflows test -name "*.py" -print0 | xargs -0 -n1 python3 -m py_compile
+      - name: "Vendored composite actions match the framework"
+        # .github/actions/gcp-auth is a verbatim copy of the framework's (see
+        # DEVLOG 2026-07-22). Nothing kept the two in step, so a fix upstream —
+        # the `authenticated` output's string-'false'-is-truthy trap, say —
+        # would never reach this repo. The framework checkout is already here,
+        # so diffing is free.
+        run: |
+          diff -r AgenticFramework/.github/actions/gcp-auth \
+                  KYC_Sentinel/.github/actions/gcp-auth \
+            || { echo "::error::vendored gcp-auth has drifted from the framework's copy — re-vendor it"; exit 1; }
       - name: "Unit tests (fake gateway)"
         working-directory: KYC_Sentinel
         run: python3 -m pytest test/ -q
@@ -64,3 +74,66 @@ jobs:
           # Hard-fail as of 2026-07-21: the tenant .agent-rfc/security/ pack
           # (risk register, agency manifest, NIST profile, tool allowlist) is
           # authored, so there is nothing left to excuse with '|| true'.
+
+      # ── Eval gates ───────────────────────────────────────────────────────
+      # testbed-tenant-spec.md §3 claims "scorecard + fairness + hallucination
+      # + adversarial gates in CI" for this tenant; until now nothing ran them,
+      # so a regression that broke pair parity or introduced a hallucinated
+      # citation reached main unchallenged.
+      #
+      # NOT the framework's reusable eval-*.yml workflows: those `run: python3
+      # scripts/run-evals.py` against the CALLING repo, and this tenant has no
+      # scripts/ of its own — it uses the framework checkout already cloned
+      # above, exactly like the security-harness step.
+      #
+      # Gated on ANTHROPIC_API_KEY because the judge route resolves to this
+      # repo's declared `judge` model (claude-opus-4-8, models.yaml). With no
+      # key the steps are skipped rather than failed — the same "optional infra
+      # never fails CI" posture as .github/actions/gcp-auth. Add the secret and
+      # the gates become real with no workflow change. Suites with too few
+      # cases skip gracefully on their own (exit 0).
+      - name: "Eval: golden scorecard"
+        if: env.HAS_JUDGE_KEY != ''
+        working-directory: KYC_Sentinel
+        env:
+          HAS_JUDGE_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
+          AGENT_OWNER_ID:     ci@kyc-sentinel
+        run: python3 $AGENTSMITH_DIR/scripts/run-evals.py --fail-below 0.80
+
+      - name: "Eval: fairness pair parity (policy-007)"
+        if: env.HAS_JUDGE_KEY != ''
+        working-directory: KYC_Sentinel
+        env:
+          HAS_JUDGE_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
+          AGENT_OWNER_ID:     ci@kyc-sentinel
+        run: python3 $AGENTSMITH_DIR/scripts/run-evals.py --suite fairness
+
+      - name: "Eval: hallucination (F7 citation grounding)"
+        if: env.HAS_JUDGE_KEY != ''
+        working-directory: KYC_Sentinel
+        env:
+          HAS_JUDGE_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
+          AGENT_OWNER_ID:     ci@kyc-sentinel
+        run: python3 $AGENTSMITH_DIR/scripts/run-evals.py --suite hallucination
+
+      # Adversarial is deterministic — pattern-matched, no judge model — so it
+      # runs unconditionally and is a real gate on every PR, key or no key.
+      - name: "Eval: adversarial (F3 prompt injection)"
+        working-directory: KYC_Sentinel
+        env:
+          PROMPT_GUARD: default
+        run: python3 $AGENTSMITH_DIR/scripts/run-evals.py --suite adversarial
+
+      - name: "Upload eval results"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: KYC_Sentinel/.agent-rfc/fixtures/eval_results.json
+          if-no-files-found: ignore

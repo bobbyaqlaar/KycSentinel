@@ -94,24 +94,35 @@ class KycApplicationWorkflow(BaseAgentWorkflow):
             return {"status": analysis.status, "stage": "analyst"}
 
         # policy-006: HIGH / judge-flag pauses for a recorded human decision.
+        #
+        # The gate is handed the assessment the Analyst ALREADY produced
+        # (gate_result=analysis) rather than an activity name to run. Passing
+        # "analyst_activity" here re-ran the Analyst — a second frontier call
+        # plus a second judge call, both discarded — and, worse, the gate then
+        # read needs_hitl off that SECOND run. The Analyst runs at
+        # temperature=0.1, so a re-run could come back MEDIUM/unflagged and the
+        # gate would approve on the spot, with no hitl_approved signal, while
+        # approve_input still carried the original HIGH assessment. A
+        # mandatory-HITL control that a coin flip can skip is not a control.
         approve_input = {
             "assessment": analysis["assessment"],
             "applicant_id": intake["profile"]["applicant_id"],
         }
-        if analysis["needs_hitl"]:
-            result = await self.run_with_hitl_gate(
-                gate_activity_name="analyst_activity",
-                gate_input=analyst_input,
-                resume_activity_name="approve_activity",
-                resume_input=approve_input,
-                dead_letter_activity_name="dlq_enqueue_activity",
-            )
-            if isinstance(result, AgentWorkflowResult):
-                return {"status": result.status, "stage": "hitl"}
-            return result
-
-        return await workflow.execute_activity(
-            "approve_activity",
-            approve_input,
-            start_to_close_timeout=timedelta(minutes=5),
+        result = await self.run_with_hitl_gate(
+            None,
+            analyst_input,
+            resume_activity_name="approve_activity",
+            resume_input=approve_input,
+            dead_letter_activity_name="dlq_enqueue_activity",
+            gate_result=analysis,
+            # dlq_enqueue_activity is the framework's GENERIC dead-letter
+            # activity: it reads payload/error/tenant_id off its input. Passing
+            # tenant_id switches the gate to that envelope — without it a HITL
+            # timeout raised KeyError inside the activity and the application
+            # was lost rather than parked for a human.
+            tenant_id=input.tenant_id,
+            gate_id="kyc-decision",
         )
+        if isinstance(result, AgentWorkflowResult):
+            return {"status": result.status, "stage": "hitl"}
+        return result

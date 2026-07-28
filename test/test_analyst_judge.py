@@ -58,25 +58,40 @@ def test_citation_outside_retrieved_set_flags():
 
 
 @pytest.mark.asyncio
+async def test_analyst_streams_on_a_streaming_provider(gateway):
+    """The analyst route is Anthropic, which the framework streams (G1), so the
+    TTFT budget applies to the one latency-critical call in this pipeline."""
+    p = _profile()
+    findings = await run_research(gateway, p)
+    await run_analyst(gateway, p, findings)
+
+    analyst_call = next(c for c in reversed(gateway.calls) if c.model_hint == "analyst")
+    assert analyst_call.streamed is True
+
+
+@pytest.mark.asyncio
 async def test_analyst_survives_provider_without_streaming(gateway):
-    """E1 regression (TestbedFeedback G1): the framework's complete_stream
-    raises NotImplementedError for anthropic/cloud-native providers — the
-    analyst's own route. Losing TTFT must not lose the assessment.
+    """G1 regression: a route pointed at a provider with no SSE surface must
+    still produce an assessment — losing ttft_ms must never lose the decision.
 
-    The FakeGateway aliases complete_stream to complete, which is exactly
-    why the original bug was invisible offline; this test forces the real
-    failure mode instead of trusting the double."""
-
-    async def _no_streaming(*a, **k):
-        raise NotImplementedError("complete_stream supports OpenAI-compatible providers only; got 'anthropic'")
-
-    gateway.complete_stream = _no_streaming
+    This used to be the tenant's problem: complete_stream raised
+    NotImplementedError and agents/analyst.py carried its own
+    `except NotImplementedError` shim. The gateway now falls back to complete()
+    inside complete_stream itself, so the shim was removed and this asserts the
+    FRAMEWORK's guarantee instead. It exercises a provider the gateway
+    genuinely cannot stream (bedrock — a cloud-native adapter with its own
+    envelope), rather than monkeypatching a raise that the real gateway no
+    longer performs; a test that simulates deleted behaviour proves nothing
+    about today's code."""
+    gateway.providers = {**gateway.providers, "analyst": "bedrock"}
 
     p = _profile()
     findings = await run_research(gateway, p)
     assessment = await run_analyst(gateway, p, findings)
+
     assert assessment.rating == "LOW"
-    assert gateway.calls[-1].model_hint == "analyst"  # fell back on the same route
+    analyst_call = next(c for c in reversed(gateway.calls) if c.model_hint == "analyst")
+    assert analyst_call.streamed is False  # fell back, same route
 
 
 def test_parity_check():

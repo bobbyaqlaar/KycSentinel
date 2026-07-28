@@ -320,3 +320,132 @@ as a long-running service (`--no-cpu-throttling --min-instances=1`,
 OPERATIONS.md §4), point it at the real `TEMPORAL_ADDRESS`, and pick up
 from there: Phoenix/Ops Portal wiring, widget embed, first HITL
 round-trip, shadow-eval sampling turn-on, first production golden case.
+
+## 2026-07-28 — review fixes: HITL bypass, vacuous demo guards, PII symmetry
+
+Cross-repo docs+code review (framework + this tenant). Five tenant-side
+correctness fixes; the framework changes they depend on are in AgentSmith's
+CHANGELOG under [Unreleased] "Review findings (2026-07-28)".
+
+- **HITL bypass on the decision gate (the serious one).** The workflow ran
+  `run_with_hitl_gate(gate_activity_name="analyst_activity", ...)` *after* it
+  had already run the Analyst via `run_with_self_correction`. The framework
+  gate executes the named activity and reads `needs_hitl` off **that** run, so
+  every HIGH application re-ran a temperature=0.1 frontier call plus the
+  judge — both discarded — and if the re-run came back MEDIUM/unflagged the
+  gate approved on the spot, no `hitl_approved` signal, while `approve_input`
+  still carried the original HIGH assessment. policy-006's "mandatory HITL"
+  was skippable by a coin flip. The gate now takes `gate_result=analysis` (new
+  framework parameter) — the decision already made — and runs no second
+  Analyst call.
+- **HITL timeout lost the application.** The same call passed the framework's
+  generic `dlq_enqueue_activity`, which reads `payload`/`error`/`tenant_id`
+  off its input, while the gate built the flattened
+  `{**gate_input, "error": ...}` shape carrying none of them → `KeyError`, so
+  a 24h timeout failed the workflow instead of parking it. Now passes
+  `tenant_id=` / `gate_id=`, which selects the generic DLQ envelope.
+- **F1/F2 drivers were vacuous.** Both raised their guard `AssertionError`
+  *inside* a `try` guarded by `except Exception`, which caught it — so with
+  the control fully broken, `make demo-all`, `demo.py all` in CI and the Cloud
+  Run smoke job all printed "the control fired" and returned success.
+  Extracted `_expect_rejection()`, which asserts outside the except and pins
+  the expected exception type (F4 now uses it too). New test stubs intake to
+  always succeed and asserts both drivers fail.
+- **Moderation hook disagreed with the input guardrail.** `agents/moderation.py`
+  hand-rolled `(?:\d[ -]?){13,19}` with no Luhn check, so an 18-digit registry
+  filing reference in a rationale was blocked as a leaked card while the
+  pre-call scrub left the identical digits alone — the exact pre/post-call
+  divergence `runtime/luhn.py` was extracted to make impossible. Now calls the
+  framework's new `input_guardrail.detect_pii()`, so the two sides cannot
+  disagree by construction.
+- **PROMPT_GUARD mode was ignored at the front door.** `pipeline.py` called
+  `scan_prompt`, which reports `blocked=True` on any hit regardless of mode,
+  so `PROMPT_GUARD=off` still blocked and `warn` — the observe-first tier
+  added as framework G9 — was unusable in this tenant. Now
+  `apply_prompt_guard` + `is_enforcing`, with `PromptGuardBlockedError` caught
+  so `strict` yields the same human-review outcome rather than a crash
+  (found by the new mode tests, not assumed). Guard reasons ride along on the
+  `Decision` in warn mode.
+- **Tool spans carried no tenant.** `ToolRegistry(tenant_id="kyc-sentinel")` —
+  the `agent.tool.*` spans were the only ones without `tenant.id`, so a
+  per-tenant Phoenix filter hid every tool call.
+
+**Verification:** tenant suite 39 → 49 passing; `demo.py all` fires all eight
+controls; `run-security-checks.py --mode ci --strict` with
+`MODERATION_HOOK=required` exits 0. Framework suite 289 → 302 passing
+(`pytest runtime/test scripts/test`).
+
+**Not done in this pass** (rest of the review's plan): remove the dead
+`NotImplementedError` streaming shim in `agents/analyst.py`, cache the corpus
+in `agents/tools.py`, add `.dockerignore`, wire the eval gates into `ci.yml`.
+
+## 2026-07-29 — review phase 2: cleanup, plus a harness that graded the wrong repo
+
+Framework-side changes are in AgentSmith's CHANGELOG under [Unreleased]
+"Review findings, phase 2". Tenant-side:
+
+- **The security harness was never grading THIS repo.** ci.yml's step is
+  labelled "Security harness (strict) against this tenant", but
+  `run-security-checks.py` resolved the `.agent-rfc/security/` pack from its
+  own install location, so every run graded the framework's pack. The risk
+  register, agency manifest and tool allowlist authored here on 2026-07-21 had
+  never been read by anything. Fixed upstream (`_tenant_root()` resolves from
+  cwd); re-verified locally — strict + `MODERATION_HOOK=required` still exits 0,
+  now against this repo's own pack.
+- **`.dockerignore` added.** `COPY . .` was baking `.env` and the full `.git`
+  into the worker image on the documented local `docker build`.
+- **Corpus cached.** `agents/tools.py:_load` re-read and re-parsed
+  sanctions.json / adverse_media.json on every tool call — 4 per application,
+  120 for F5's 30-application batch. Same module-level cache
+  `agents/research.py` already used for the policy corpus.
+- **Dead streaming shim removed.** `_complete_maybe_stream`'s
+  `except NotImplementedError` branch was unreachable in both real and fake
+  mode since framework G1, and its comment claimed the opposite of the shipped
+  behaviour. `test_analyst_survives_provider_without_streaming` was rewritten
+  to assert the framework's guarantee against a genuinely non-streaming
+  provider (bedrock) instead of monkeypatching a raise the gateway no longer
+  performs — a test that simulates deleted behaviour proves nothing.
+- **Vendored-action drift check** in ci.yml: `.github/actions/gcp-auth` is a
+  verbatim copy of the framework's, and nothing kept them in step. CI now diffs
+  it against the framework checkout it already clones.
+
+**Verification:** tenant suite 49 → 50 passing; `demo.py all` fires all eight
+controls; strict harness exits 0. Framework suite 310 → 322. Phase 1 fixes
+re-proved end to end: no analyst re-run in the HITL gate, F1/F2 fail loudly
+when their control is stubbed out, moderation and the pre-call guard agree on
+a non-Luhn 18-digit run, all five PROMPT_GUARD modes behave per contract,
+tool registry carries tenant.id.
+
+## 2026-07-29 — phase 3: pinned to a real release, eval gates wired
+
+- **Pinned to `agentsmith-runtime@v1.1.0`.** The framework cut its first
+  actual release today (1.0.0 was documented but never tagged), so
+  `requirements.txt` no longer tracks a moving `main`. Every `docker build` /
+  Cloud Run `--source` deploy of this repo now resolves the same framework
+  commit — verified with a `pip install --dry-run`, which resolved
+  `agentsmith-runtime-1.1.0` at 5897e8a. `framework.version` moved to `1.1.x`.
+  Adopting a new framework version is now a deliberate edit to that line.
+- **Eval gates wired into ci.yml**, closing the gap between
+  testbed-tenant-spec.md §3's claim and what CI actually ran (nothing).
+  - **adversarial** runs unconditionally on every PR — it is deterministic
+    pattern matching with no judge model, so it needs no secrets. Verified
+    locally: 7/7 cases, 0.00 miss rate.
+  - **scorecard / fairness / hallucination** run when `ANTHROPIC_API_KEY` is
+    present, since the judge resolves to this repo's declared
+    `claude-opus-4-8`. Without the secret they are skipped, not failed — the
+    same "optional infra never fails CI" posture as the `gcp-auth` action. Add
+    the secret and they become real gates with no workflow change.
+  - Deliberately NOT the framework's reusable `eval-*.yml` workflows: those
+    run `python3 scripts/run-evals.py` against the calling repo, and this
+    tenant has no `scripts/` of its own. It uses the framework checkout ci.yml
+    already clones, exactly like the security-harness step.
+- **Framework bug this surfaced:** `run-evals.py` returned exit 2 for "too few
+  cases to gate", which failed the CI step — so a fresh `ai-tenant-init` repo
+  went red on its first push for not yet having a golden dataset, and
+  eval-scorecard.yml's own comment ("exit 2 = skip gracefully (not a
+  failure)") described behaviour the code never had. Fixed upstream; the CLI
+  boundary now maps skip to 0.
+
+**Verification:** tenant suite 50 passing; `demo.py all` fires all eight
+controls; strict security harness exits 0 against this repo's own pack;
+adversarial eval gate passes offline.

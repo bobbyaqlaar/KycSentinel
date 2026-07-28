@@ -27,12 +27,19 @@ import re
 
 from . import _framework  # noqa: F401 — sys.path side effect
 
+from runtime.input_guardrail import detect_pii
 from runtime.moderation import ModerationResult
 
 # Emirates ID and card numbers must never appear in a rationale. The input
-# guardrail scrubs them from prompts; this is the symmetric output check.
-_EMIRATES_ID = re.compile(r"\b784-?\d{4}-?\d{7}-?\d\b")
-_CARD = re.compile(r"(?:\d[ -]?){13,19}")
+# guardrail scrubs them from prompts; this is the symmetric output check — and
+# it now asks the guardrail itself (detect_pii) rather than re-deriving the
+# patterns. The hand-rolled versions that used to live here had drifted
+# already: the card regex `(?:\d[ -]?){13,19}` carried no Luhn check, so a
+# rationale mentioning an 18-digit registry filing reference was flagged as a
+# leaked card and blocked, while the pre-call guard had deliberately left the
+# same digits alone. Symmetric controls that disagree about what PII *is* are
+# worse than one control (framework ReviewFindings-2026-07-18 B1).
+_REPORTED_PII_TYPES = ("emirates_id", "card")
 
 # policy-007: protected attributes must not appear as rating justification.
 # Matched only in a *justifying* construction ("because ... nationality"),
@@ -51,14 +58,13 @@ def classify_output(text: str) -> ModerationResult:
     exception here as a failed control rather than a block."""
     reasons: list[str] = []
 
-    if _EMIRATES_ID.search(text):
-        reasons.append("pii_emirates_id_in_output")
-
-    for candidate in _CARD.findall(text):
-        digits = re.sub(r"\D", "", candidate)
-        if 13 <= len(digits) <= 19:
-            reasons.append("pii_card_in_output")
-            break
+    # detect_pii also reports email/phone; this hook deliberately reports only
+    # the two identifiers a KYC rationale must never carry. Widening it is a
+    # one-line change to _REPORTED_PII_TYPES, not a new pattern to maintain.
+    found = detect_pii(text)
+    for kind in _REPORTED_PII_TYPES:
+        if found.get(kind):
+            reasons.append(f"pii_{kind}_in_output")
 
     if _PROTECTED_JUSTIFICATION.search(text):
         reasons.append("protected_attribute_justification")

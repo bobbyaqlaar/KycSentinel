@@ -58,6 +58,36 @@ def test_short_digit_strings_are_not_cards():
     assert classify_output("Reference number 12345678 filed.").allowed is True
 
 
+def test_long_non_luhn_digit_runs_are_not_cards():
+    """Regression: the hand-rolled card regex here matched any 13-19 digit run
+    with no Luhn check, so a registry filing reference was blocked as a leaked
+    card while the pre-call input guardrail — which does check Luhn — left the
+    identical digits alone. Two symmetric PII controls disagreeing about what
+    PII *is* is the exact failure runtime/luhn.py exists to prevent. This hook
+    now asks runtime.input_guardrail.detect_pii instead of re-deriving it."""
+    text = "Registry filing 2024 0918 3345 1207 66 shows no adverse record."
+    result = classify_output(text)
+    assert result.allowed is True, result.reasons
+
+    from runtime.input_guardrail import detect_pii
+
+    assert "card" not in detect_pii(text)
+
+
+def test_output_check_agrees_with_the_pre_call_guard():
+    """The two directions must classify the same text identically."""
+    from runtime.input_guardrail import detect_pii, scrub_text
+
+    text = "Emirates ID 784-1985-1234567-1 and card 4111 1111 1111 1111."
+    scrubbed, scrub_counts = scrub_text(text, mode="default")
+
+    assert set(detect_pii(text)) == set(scrub_counts)
+    assert "784-1985" not in scrubbed and "4111 1111" not in scrubbed
+    reasons = classify_output(text).reasons
+    assert "pii_emirates_id_in_output" in reasons
+    assert "pii_card_in_output" in reasons
+
+
 def test_never_raises_on_odd_input():
     """A classifier that throws would take the LLM call down with it."""
     for text in ("", "   ", "🙂" * 50, "-" * 500):

@@ -1,0 +1,41 @@
+# Keep local secrets and dev state out of the worker image.
+#
+# The Dockerfile does `COPY . .`, so without this file the documented
+# `docker build -t kyc-sentinel .` baked the local .env — DATABASE_URL today,
+# ANTHROPIC_API_KEY / ANTHROPIC_API_KEY_JUDGE / GROQ_API_KEY once "Running
+# live" is wired — into an image layer, where it survives in the pushed
+# Artifact Registry image and in `docker history`. The CI path was only
+# incidentally safe because gcloud synthesises a .gcloudignore from
+# .gitignore; the local build had nothing protecting it.
+
+# Secrets and local runtime state
+.env
+.env.*
+!.env.example
+.agent-history.log
+.agent-rfc/fixtures/sync_state.json
+.agent-rfc/fixtures/token_velocity_cache.json
+.agent-rfc/fixtures/eval_results.json
+.agent-rfc/fixtures/knowledge_graph.json
+
+# VCS and CI — not needed at runtime, and .git carries the full history
+.git
+.gitignore
+.github
+
+# Python build/test artifacts
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+.claude/
+
+# Docs — the worker doesn't read them
+DEVLOG.md
+README.md

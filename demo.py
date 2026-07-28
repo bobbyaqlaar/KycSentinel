@@ -29,6 +29,8 @@ from agents.judge import check_parity  # noqa: E402
 from agents.tools import ToolNotAllowedError, registry  # noqa: E402
 from pipeline import process_application  # noqa: E402
 
+from runtime.structured_output import StructuredOutputError  # noqa: E402
+
 FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "applicants.json").read_text())
 
 
@@ -40,17 +42,57 @@ def _banner(fid: str, claim: str) -> None:
     print(f"\n━━ {fid.upper()} — {claim}")
 
 
+async def _sync(fn, *args, **kwargs):
+    """Adapt a synchronous call so `_expect_rejection` can await it."""
+    return fn(*args, **kwargs)
+
+
+async def _expect_rejection(step, control: str, expected: type[Exception]) -> Exception:
+    """Await `step()`, which MUST be rejected, and return the exception.
+
+    Written as a helper because the obvious inline shape is quietly broken:
+
+        try:
+            await step()
+            raise AssertionError("expected a failure")   # ← inside the try
+        except Exception as exc:                         # ← catches it
+            print("the control fired")
+
+    the guard's own AssertionError is raised inside the try and caught by the
+    same `except Exception`, so the driver prints success and returns its
+    control name even when the control under test does nothing at all. That
+    matters here more than in ordinary code: these drivers are a CI step
+    (ci.yml runs `demo.py all`), the Cloud Run staging smoke job, and the
+    release-qualification check for the framework itself
+    (testbed-tenant-spec.md §6). A vacuously-passing driver is worse than no
+    driver — it reports a control as proven while it is broken.
+
+    `expected` is asserted too, so an unrelated failure (a missing fixture, a
+    typo'd applicant id) can't masquerade as the control firing.
+    """
+    try:
+        await step()
+    except expected as exc:
+        return exc
+    except Exception as exc:
+        raise AssertionError(
+            f"{control}: expected {expected.__name__}, got {type(exc).__name__}: {exc}"
+        ) from exc
+    raise AssertionError(f"{control}: the step under test succeeded — control did NOT fire")
+
+
 async def f1() -> str:
     _banner("f1", "malformed submission → recoverable step → DLQ edit-and-resume")
     gw = get_gateway()
-    try:
-        await run_intake(gw, _sub("malf-009"))
-        raise AssertionError("expected a validation failure")
-    except Exception as exc:
-        print(f"   intake rejected the payload: {type(exc).__name__}: {exc}")
-        print("   → in the workflow this is run_with_recoverable_step: the payload")
-        print("     parks in the DLQ; portal 'Replay with edits' → replay webhook →")
-        print("     temporal_replay signals the live workflow with the human fix.")
+    exc = await _expect_rejection(
+        lambda: run_intake(gw, _sub("malf-009")),
+        "intake date validation",
+        StructuredOutputError,
+    )
+    print(f"   intake rejected the payload: {type(exc).__name__}: {exc}")
+    print("   → in the workflow this is run_with_recoverable_step: the payload")
+    print("     parks in the DLQ; portal 'Replay with edits' → replay webhook →")
+    print("     temporal_replay signals the live workflow with the human fix.")
     fixed = _sub("malf-009").replace("31-02-1990", "1990-02-13")
     result = await run_intake(gw, fixed)
     print(f"   human-edited payload resumes cleanly → profile {result.profile.applicant_id} parsed")
@@ -60,13 +102,14 @@ async def f1() -> str:
 async def f2() -> str:
     _banner("f2", "model returns broken JSON → opt-in self-correction, then human DLQ")
     gw = get_gateway()
-    try:
-        await run_intake(gw, _sub("malf-010"))
-        raise AssertionError("expected StructuredOutputError")
-    except Exception as exc:
-        print(f"   structured-output gate rejected model text: {type(exc).__name__}")
-        print("   → run_with_self_correction retries ONCE with a corrected payload;")
-        print("     if still failing it escalates to the human DLQ (never silently loops).")
+    exc = await _expect_rejection(
+        lambda: run_intake(gw, _sub("malf-010")),
+        "structured-output gate",
+        StructuredOutputError,
+    )
+    print(f"   structured-output gate rejected model text: {type(exc).__name__}")
+    print("   → run_with_self_correction retries ONCE with a corrected payload;")
+    print("     if still failing it escalates to the human DLQ (never silently loops).")
     return "self_correction"
 
 
@@ -80,11 +123,13 @@ async def f3() -> str:
 
 async def f4() -> str:
     _banner("f4", "non-allowlisted tool call → deny-by-default (SEC-TOOL-001)")
-    try:
-        registry.invoke("wire_transfer", {"to_account": "IBAN-X", "amount_usd": 1e6})
-        raise AssertionError("wire_transfer must be denied")
-    except ToolNotAllowedError as exc:
-        print(f"   denied: {exc}")
+    exc = await _expect_rejection(
+        # registry.invoke is sync; wrap it so the shared guard still applies.
+        lambda: _sync(registry.invoke, "wire_transfer", {"to_account": "IBAN-X", "amount_usd": 1e6}),
+        "tool allowlist",
+        ToolNotAllowedError,
+    )
+    print(f"   denied: {exc}")
     print(f"   allowlisted tools: {sorted(registry._allowlist)}")
     return "tool_allowlist"
 

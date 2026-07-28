@@ -1,13 +1,21 @@
 # KYC Sentinel tenant deps.
 #
-# The AgentSmith runtime is a real dependency now (framework G6) rather than
-# something bootstrapped onto sys.path. Now that both repos are on GitHub,
-# pin to `main` (no release tag exists yet — retarget to a `vX.Y.Z` tag/sha
-# once the framework cuts one, for reproducible builds). CI still installs
-# from the checked-out framework path (see .github/workflows/ci.yml); this
+# The AgentSmith runtime is a real dependency (framework G6) rather than
+# something bootstrapped onto sys.path.
+#
+# Pinned to a TAG, not `main`. Until the framework cut v1.1.0 (2026-07-29) no
+# release existed, so this had to track a moving branch — every `docker build`
+# resolved a different framework commit, and two builds of the same tenant
+# commit were not the same image. For a regulated app that is the wrong
+# default. Bump this line deliberately when adopting a new framework version,
+# and keep `framework.version` in .agenticframework/tenant.yaml in step
+# (currently 1.1.x).
+#
+# CI installs from the checked-out framework path instead (see
+# .github/workflows/ci.yml), so PRs test against the framework's HEAD; this
 # line is what a standalone `docker build` / Cloud Run `--source` deploy
-# resolves instead, since those only have this repo's own tree to work with.
-agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@main
+# resolves, since those only have this repo's own tree to work with.
+agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@v1.1.0
 
 # Direct deps of this app's own code (the runtime brings its own).
 pydantic>=2.0,<3.0
