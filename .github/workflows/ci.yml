@@ -100,6 +100,14 @@ jobs:
       # passed through below because YAML cannot look up a secret by a name
       # computed at runtime; the DECISION lives in code that can read
       # models.yaml. Suites with too few cases also skip gracefully (exit 0).
+      # THRESHOLD IS UNCALIBRATED. 0.80 is the framework default, never
+      # validated against this repo's configured judge (claude-opus-4-8) — the
+      # only judges these cases have been scored by are local Ollama models,
+      # and they were unreliable enough to mark kyc_012 down for producing
+      # "identical outputs despite differing nationalities", which is exactly
+      # what policy-007 requires. Before trusting this as a merge gate: set the
+      # judge credential, run it a few times on a green main, and set the
+      # threshold from what a passing run actually scores.
       - name: "Eval: golden scorecard"
         working-directory: KYC_Sentinel
         env:

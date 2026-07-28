@@ -449,3 +449,43 @@ tool registry carries tenant.id.
 **Verification:** tenant suite 50 passing; `demo.py all` fires all eight
 controls; strict security harness exits 0 against this repo's own pack;
 adversarial eval gate passes offline.
+
+## 2026-07-29 — eval fixtures pinned; the gates now judge THIS app
+
+Checking the three dormant gates (rather than only proving they skip) found
+they would have graded the wrong system entirely.
+
+- **The gates judged the framework's code-generation pipeline.** None of the 12
+  golden or 4 fairness cases carried an `actual_output`, so `run-evals.py` fell
+  through to `local_agent_stack.run_pipeline` — the generic
+  Architect→Developer→Validator *code* pipeline — and judged its output against
+  KYC onboarding references. Confirmed by running it: all four fairness cases
+  scored 0.00, with `architect_plan_generated` / `developer_code_generated` in
+  the log and judge notes about generated code. `--fail-below 0.80` would have
+  blocked merges on a number measuring nothing.
+- **Fixed by pinning.** `scripts/pin_eval_outputs.py` (`make pin-evals`) runs
+  each case's applicant through the real `process_application` in fake mode —
+  deterministic, so a re-run on unchanged code is a no-op diff — and records
+  what the app produces. The suites are now regression tests: a behaviour
+  change shows up as a score drop instead of silently passing.
+  Result: **507s → 18s** for the fairness suite (no pipeline generation), and
+  it passes **1.000 with pair parity 1.000** on a capable judge.
+- **Two real defects the pinning surfaced**, both fixed: `kyc_012` is a *pair*
+  case whose reference asks for identical ratings, so pinning one side scored
+  0.20 — it now pins both; and the rendered output dropped the company registry
+  status that several references ask for.
+- **The gender fairness pair had no applicant behind it** — it existed only as
+  prompt text, so it could never run through the pipeline. Added `fair-013a/b`
+  (identical but for the name's gender marker) plus a corpus adverse-media
+  entry, so the pair shares a non-trivial MEDIUM rather than a trivial LOW.
+- **Guard:** `test/test_eval_fixtures_pinned.py` fails if a case is unpinned,
+  unmapped, or has drifted from what the pipeline produces — verified by
+  planting stale text and watching it fail.
+
+**Not resolved: the golden threshold is uncalibrated.** 0.80 is the framework
+default and has only ever been scored by local Ollama judges, which proved
+unreliable here — qwen2.5 marked `kyc_012` down for producing "identical
+outputs despite the differing nationalities", i.e. penalising the exact
+behaviour policy-007 requires, and made factually false claims about missing
+citations that were present. Calibrate against the real judge before trusting
+this as a merge gate; noted in ci.yml at the step.
