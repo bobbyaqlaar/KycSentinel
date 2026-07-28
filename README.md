@@ -18,10 +18,15 @@ citation grounding + pair parity) → auto-approve (LOW) or HITL (HIGH/flag).
 
 ```bash
 export AGENTSMITH_DIR=/path/to/AgenticFramework   # or keep it as a sibling dir
-make test        # 24 tests, fake gateway
+make test        # fake gateway, no network
 make demo-all    # F1–F8 scenario drivers
 make demo-f4     # a single scenario
 ```
+
+The framework is a real dependency, pinned in `requirements.txt` to
+`agentsmith-runtime @ v1.1.0`. `AGENTSMITH_DIR` is only for developing against
+a live framework checkout — it takes precedence over the installed package so
+your edits there take effect without reinstalling.
 
 ## The F-scenarios
 
@@ -51,4 +56,18 @@ make demo-f4     # a single scenario
 `pipeline.py` engine-agnostic pipeline · `workflows/` Temporal workflow on
 `BaseAgentWorkflow` · `corpus/` synthetic policies/sanctions/media ·
 `fixtures/applicants.json` 12 profiles · `.agent-rfc/` RFCs, golden +
-fairness seeds, tool allowlist · `demo.py` F-drivers · `DEVLOG.md` log.
+fairness seeds, security pack · `demo.py` F-drivers · `DEVLOG.md` log.
+
+## CI gates
+
+`.github/workflows/ci.yml` runs offline on every PR: unit tests, the F-scenario
+drivers, the framework security harness `--strict` (with
+`MODERATION_HOOK=required`), and the **adversarial** eval suite — all without
+credentials.
+
+The **scorecard / fairness / hallucination** gates need a judge model. They
+skip with a message naming the variable they want rather than failing, so CI
+stays green until you opt in. The variable comes from the `judge` role in
+`models.yaml` (currently `ANTHROPIC_API_KEY_JUDGE`, its own account for
+judge/actor separation) — set that secret and the three gates turn on with no
+workflow change.
