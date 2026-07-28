@@ -3,10 +3,10 @@ name: "KYC Sentinel CI"
 # Tenant CI in the shape of the framework's ci-python-fastapi.yml template:
 # unit tests + F-scenario drivers offline (fake gateway), then the
 # framework's security harness strict against THIS repo's .agent-rfc/security.
-# Eval gates (scorecard / fairness / hallucination) call the framework's
-# reusable eval workflows once this repo is on GitHub — wire the
-# secrets per OPERATIONS.md "GitHub Actions secrets" and see DEVLOG.md's
-# CI/CD section for the rollout log.
+# Eval gates run at the end: adversarial always, and scorecard / fairness /
+# hallucination whenever the judge route's credential is present (see the
+# comment above those steps). Secrets per OPERATIONS.md "GitHub Actions
+# secrets"; rollout log in DEVLOG.md.
 
 on:
   push:
@@ -86,41 +86,55 @@ jobs:
       # scripts/ of its own — it uses the framework checkout already cloned
       # above, exactly like the security-harness step.
       #
-      # Gated on ANTHROPIC_API_KEY because the judge route resolves to this
-      # repo's declared `judge` model (claude-opus-4-8, models.yaml). With no
-      # key the steps are skipped rather than failed — the same "optional infra
-      # never fails CI" posture as .github/actions/gcp-auth. Add the secret and
-      # the gates become real with no workflow change. Suites with too few
-      # cases skip gracefully on their own (exit 0).
+      # Whether the judge is reachable is decided by run-evals.py's
+      # `--skip-without-judge-credentials`, NOT by a `if: secrets.X != ''` in
+      # this file. The first cut of these steps gated on ANTHROPIC_API_KEY and
+      # was wrong twice: it hardcodes a provider (repoint `judge` at Groq or
+      # Ollama and the condition is nonsense), and this repo's judge declares
+      # `api_key_env: ANTHROPIC_API_KEY_JUDGE` in models.yaml — so the gate was
+      # reading a variable the route never uses, and would have stayed skipped
+      # even after the declared key was set.
+      #
+      # The flag asks the merged registry which env var the `judge` role needs
+      # and skips with a message naming it. All plausible provider keys are
+      # passed through below because YAML cannot look up a secret by a name
+      # computed at runtime; the DECISION lives in code that can read
+      # models.yaml. Suites with too few cases also skip gracefully (exit 0).
       - name: "Eval: golden scorecard"
-        if: env.HAS_JUDGE_KEY != ''
         working-directory: KYC_Sentinel
         env:
-          HAS_JUDGE_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
-          GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
-          AGENT_OWNER_ID:     ci@kyc-sentinel
-        run: python3 $AGENTSMITH_DIR/scripts/run-evals.py --fail-below 0.80
+          ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY_JUDGE:  ${{ secrets.ANTHROPIC_API_KEY_JUDGE }}
+          GROQ_API_KEY:             ${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
+          AGENT_OWNER_ID:           ci@kyc-sentinel
+        run: >-
+          python3 $AGENTSMITH_DIR/scripts/run-evals.py
+          --fail-below 0.80 --skip-without-judge-credentials
 
       - name: "Eval: fairness pair parity (policy-007)"
-        if: env.HAS_JUDGE_KEY != ''
         working-directory: KYC_Sentinel
         env:
-          HAS_JUDGE_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
-          GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
-          AGENT_OWNER_ID:     ci@kyc-sentinel
-        run: python3 $AGENTSMITH_DIR/scripts/run-evals.py --suite fairness
+          ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY_JUDGE:  ${{ secrets.ANTHROPIC_API_KEY_JUDGE }}
+          GROQ_API_KEY:             ${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
+          AGENT_OWNER_ID:           ci@kyc-sentinel
+        run: >-
+          python3 $AGENTSMITH_DIR/scripts/run-evals.py
+          --suite fairness --skip-without-judge-credentials
 
       - name: "Eval: hallucination (F7 citation grounding)"
-        if: env.HAS_JUDGE_KEY != ''
         working-directory: KYC_Sentinel
         env:
-          HAS_JUDGE_KEY:      ${{ secrets.ANTHROPIC_API_KEY }}
-          ANTHROPIC_API_KEY:  ${{ secrets.ANTHROPIC_API_KEY }}
-          GROQ_API_KEY:       ${{ secrets.GROQ_API_KEY }}
-          AGENT_OWNER_ID:     ci@kyc-sentinel
-        run: python3 $AGENTSMITH_DIR/scripts/run-evals.py --suite hallucination
+          ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_API_KEY_JUDGE:  ${{ secrets.ANTHROPIC_API_KEY_JUDGE }}
+          GROQ_API_KEY:             ${{ secrets.GROQ_API_KEY }}
+          OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
+          AGENT_OWNER_ID:           ci@kyc-sentinel
+        run: >-
+          python3 $AGENTSMITH_DIR/scripts/run-evals.py
+          --suite hallucination --skip-without-judge-credentials
 
       # Adversarial is deterministic — pattern-matched, no judge model — so it
       # runs unconditionally and is a real gate on every PR, key or no key.
