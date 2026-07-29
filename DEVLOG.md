@@ -568,3 +568,29 @@ exactly what policy-007 requires. The framework now records per-case
 
 Still open: the golden threshold remains uncalibrated, and the judge account
 still needs credit before the three gates produce real verdicts.
+
+## 2026-07-29 — the judge config was not what models.yaml appeared to say
+
+Framework Phase 4 found that `load_model_registry` shallow-merged this repo's
+`judge` role over the framework's, so the role this file declares was not the
+role the code used. Merged, it carried:
+
+- `endpoint: ${OLLAMA_BASE_URL}/v1` inherited from the framework's local judge —
+  so the **runtime** judge posted `claude-opus-4-8` requests at the Ollama host.
+  The eval path escaped only because `cost_router` used to ignore `endpoint`.
+- `degrade_to: fast` — the previous entry's removal of `degrade_to: research`
+  did **not** take effect, because the framework's value showed through. The
+  judge documented here as having no fallback still degraded, to `smollm2`.
+
+A tenant entry declaring a different `id` is now taken wholesale rather than
+merged, so this file's judge role means what it reads as. Verified: the merged
+config is exactly the keys declared here, and `_degrade_chain("judge")` is
+`["judge"]`. No change was needed in this repo.
+
+The judge can now also be pointed at xAI or Google from `models.yaml` — see the
+worked options in the framework's `runtime/models.yaml`. Cross-vendor is the
+stronger choice for independence: `judge_independence_warning` only catches
+identical ids, so `claude-opus-4-8` grading `claude-sonnet-4-6` passes the check
+while both share a lineage. The threshold must be recalibrated per judge
+(`fail_below` on the role), and `scripts/verify_judge_route.py` proves a route
+reaches its declared provider before it gates merges.
