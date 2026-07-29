@@ -126,3 +126,54 @@ async def test_judge_warns_when_configured_same_as_analyst(gateway, monkeypatch,
     with caplog.at_level(logging.WARNING):
         await run_judge(gateway, a, f)
     assert any("not independent" in r.message for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_judge_provider_outage_does_not_fail_the_application(gateway, caplog):
+    """The advisory critique is advisory in failure too.
+
+    Its result is discarded — the verdict comes from the deterministic citation
+    and parity checks — yet an exception from it used to propagate and fail the
+    whole application. A call whose answer nobody reads could block onboarding.
+
+    This was invisible while the judge role declared `degrade_to: research`: an
+    outage quietly substituted a weaker model to write a critique nobody reads.
+    That degrade is gone (a substituted grader is not a grader), so this is what
+    keeps applications flowing when the judge provider is down.
+    """
+    p = _profile()
+    findings = await run_research(gateway, p)
+    assessment = await run_analyst(gateway, p, findings)
+
+    async def _exhausted(*a, **k):
+        raise RuntimeError(
+            "HTTP 400: Your credit balance is too low to access the Anthropic API."
+        )
+
+    gateway.complete = _exhausted
+
+    with caplog.at_level("WARNING"):
+        verdict = await run_judge(gateway, assessment, findings)
+
+    # The hard checks still ran and still decided.
+    assert not verdict.flagged
+    assert "Advisory judge critique unavailable" in caplog.text
+    assert "credit balance is too low" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_flagged_citation_still_blocks_when_the_judge_is_down(gateway):
+    """Fail-open must not become fail-blind: the deterministic checks are the
+    gate, so they must still flag with the LLM unavailable."""
+    p = _profile()
+    findings = await run_research(gateway, p)
+    assessment = await run_analyst(gateway, p, findings)
+    assessment.citations = ["doc-that-was-never-retrieved"]
+
+    async def _exhausted(*a, **k):
+        raise RuntimeError("provider down")
+
+    gateway.complete = _exhausted
+
+    verdict = await run_judge(gateway, assessment, findings)
+    assert verdict.flagged

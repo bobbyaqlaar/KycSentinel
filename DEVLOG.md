@@ -529,3 +529,42 @@ Until then the three judge-backed gates skip, and the golden threshold
 (`--fail-below 0.80`) stays uncalibrated — it has never been scored by the
 configured judge. Calibrate on a green `main` before trusting it as a merge
 gate.
+
+## 2026-07-29 — the judge does not degrade, and an advisory call stops being fatal
+
+Framework review Phase 2. The `judge` role declared `degrade_to: research`,
+justified in a six-line comment as "availability wins over strict separation".
+Removing it turned out to expose a real bug.
+
+**The declared fallback was wrong three ways.** On the path that gates merges
+it could not fire — CI evals go through `scripts/cost_router.py`, which does
+not walk `degrade_to`; only `runtime/llm_gateway.py` does. So when the account
+hit "credit balance is too low", the gates went dark while `models.yaml` said
+they would reroute. It named an **actor** route (`research` is the Groq model
+the pipeline itself uses), pointing the grader at the side of the separation it
+exists to be independent of. And both `models.yaml` and RFC-002 claimed
+`warn_if_judge_not_independent` would catch such a collapse — it cannot.
+`agents/judge.py` passes the ids **declared** in the merged registry, so it
+validates this file, not what ran.
+
+**Where the degrade could fire, it was masking a defect.** `run_judge` makes an
+advisory critique call whose result is discarded — the verdict comes from the
+deterministic citation and parity checks — but an exception from it propagated
+and failed the whole application. A call whose *answer* nobody reads could
+block onboarding. The degrade hid it by substituting a weaker model to write a
+critique nobody reads. That call is now fail-open; the degrade is gone.
+
+Two tests pin it: a credit-exhausted judge does not block an application, and a
+citation outside the retrieved set still flags with the judge unavailable — so
+fail-open does not become fail-blind.
+
+**Why not just keep the degrade.** A degraded actor produces worse output that
+a good judge still catches. A degraded judge writes confident verdicts into the
+same `score` field, against the same threshold, gating the same merges. Local
+judges were measurably unreliable on these very cases — qwen2.5 marked
+`kyc_012` down for producing identical ratings across nationalities, which is
+exactly what policy-007 requires. The framework now records per-case
+`judged_by` and fails a scorecard that mixes graders.
+
+Still open: the golden threshold remains uncalibrated, and the judge account
+still needs credit before the three gates produce real verdicts.

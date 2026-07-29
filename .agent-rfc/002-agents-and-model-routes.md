@@ -9,7 +9,49 @@ Four model routes, chosen so multi-LLM is structural, not cosmetic:
 | Intake | `falcon3:3b` @ Ollama | Sovereign/in-border: raw PII text is parsed locally; the scrub runs before ANY cloud call. `degrade_to: null` — a PII route must never fail over to a cloud model. |
 | Research | `llama-3.3-70b` @ Groq | High-volume retrieval + tool loops on the cheap tier, **plus its own one-line screening-summary LLM call** so the route is genuinely exercised, not only a degrade target (E2). |
 | Analyst | `claude-sonnet-4-6` (frontier) | The one expensive judgment call; streamed (`complete_stream`, TTFT budget); degrade ladder → research → intake (F5). |
-| Judge | `claude-opus-4-8` (frontier, **distinct from Analyst**) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). The framework logs a warning (`runtime.judging.judge_independence_warning`) if the two ever resolve to the same id. `degrade_to: research` (→ `intake`) — availability wins over strict separation: a hard-failed judge blocks every application behind it, so it degrades through the same chain the Analyst uses rather than taking down the pipeline. Every degrade is logged (`Degraded from %r to %r due to provider error`), never silent, and `judge_independence_warning` still runs against the merged registry either way, so a degrade that collapses judge and analyst onto the same model is caught and logged, just not blocked. |
+| Judge | `claude-opus-4-8` (frontier, **distinct from Analyst**) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). **No `degrade_to` — the only role without one.** See "Why the judge does not degrade" below. |
+
+## Why the judge does not degrade
+
+Every other role falls back down the ladder on a provider failure. The judge
+does not, and that asymmetry is the decision.
+
+A degraded **actor** produces worse output that a good judge still catches. A
+degraded **judge** produces confident verdicts into the same `score` field,
+compared against the same threshold, gating the same merges — and nothing
+downstream can distinguish them from real ones. Scores are only comparable
+against the grader they were calibrated for. We have direct evidence of the
+failure mode: local judges marked `kyc_012` down for producing identical
+ratings across nationalities, which is precisely what policy-007 requires.
+
+This role previously declared `degrade_to: research`, which was wrong three
+ways.
+
+**On the path that gates merges it could not fire.** CI evals call
+`scripts/eval_judge.py` → `scripts/cost_router.py`, which does not walk
+`degrade_to`; only `runtime/llm_gateway.py` does. When the judge account ran
+out of credit the gates went dark while this file promised a reroute.
+
+**Where it could fire, it masked a bug.** `agents/judge.py`'s advisory critique
+does go through the gateway — but its result is discarded (the verdict comes
+from the deterministic citation and parity checks), while an exception from it
+failed the entire application. A call whose *answer* nobody reads could block
+onboarding. The degrade hid this by substituting a weaker model to write a
+critique nobody reads. That call is now fail-open, which is the real fix.
+
+**It named an actor route.** `research` is the Groq model the pipeline itself
+uses, so the declared fallback pointed the grader at the side of the separation
+it exists to be independent of.
+
+The independence check does not cover this either. `agents/judge.py` passes the
+ids **declared** in the merged registry to `warn_if_judge_not_independent`, so
+it validates configuration and is structurally blind to a runtime substitution.
+It is a check on this file, not on what ran.
+
+So an unreachable judge now skips the gate with the provider's message
+(framework `run-evals.py`), and the framework records per-case `judged_by`
+provenance with a hard failure if one scorecard mixes graders. No verdict is a
+better outcome than a verdict you cannot trust.
 
 ## Offline mode
 

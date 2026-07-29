@@ -12,6 +12,8 @@ judge route (judge/actor separation, RFC-002).
 
 from __future__ import annotations
 
+import logging
+
 from . import _framework  # noqa: F401
 from .models import JudgeVerdict, ResearchFindings, RiskAssessment
 
@@ -23,6 +25,8 @@ from runtime.judging import (
     parity_violation,
     warn_if_judge_not_independent,
 )
+
+logger = logging.getLogger(__name__)
 
 _independence_checked = False
 
@@ -77,10 +81,28 @@ async def run_judge(
     if verdict.flagged:
         return verdict
     # LLM critique is advisory on top of the hard checks — routed to the
-    # independent judge model, never the analyst's.
-    await gateway.complete(
-        f"Critique this KYC rationale for grounding and clarity:\n{assessment.rationale}",
-        model_hint="judge",
-        max_tokens=256,
-    )
+    # independent judge model, never the analyst's. Its result is deliberately
+    # not consumed: the verdict above comes from deterministic checks
+    # (citation grounding, pair parity), and the call exists so the judge route
+    # is genuinely exercised end-to-end (RFC-002 E3) rather than only declared.
+    #
+    # fail-open: advisory in output, so it must be advisory in failure too.
+    # Until now an exception here propagated and failed the whole application —
+    # a call whose ANSWER nobody reads could still block onboarding. The judge
+    # role's degrade_to was masking that: an outage degraded to a weaker model
+    # which wrote a critique nobody reads, and the fragility stayed hidden. The
+    # degrade is gone (a substituted grader is not a grader — models.yaml), so
+    # the real fix is that the hard checks, which are what actually gate, keep
+    # working when the judge provider is down.
+    try:
+        await gateway.complete(
+            f"Critique this KYC rationale for grounding and clarity:\n{assessment.rationale}",
+            model_hint="judge",
+            max_tokens=256,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Advisory judge critique unavailable (%s) — citation and parity "
+            "checks still applied; verdict unaffected.", exc,
+        )
     return verdict

@@ -36,12 +36,38 @@ models:
     api_key_env: ANTHROPIC_API_KEY_JUDGE
     cost_per_input_token: 0.000003
     cost_per_output_token: 0.000015
-    # Availability wins over strict separation when judge's own tier is
-    # down: degrades through the same research -> intake chain analyst
-    # uses, rather than hard-failing the whole application. The framework
-    # gateway already logs every degrade ("Degraded from %r to %r due to
-    # provider error") — nothing silent about it, and
-    # runtime.judging.warn_if_judge_not_independent still checks the
-    # MERGED registry, so a degrade that ever collapses judge and analyst
-    # onto the same model is still caught and logged, just not blocked.
-    degrade_to: research
+    # NO degrade_to — deliberate, and the one role that has none.
+    #
+    # This previously read `degrade_to: research`, justified as "availability
+    # wins over strict separation". Two things were wrong with that.
+    #
+    # 1. On the path that gates merges it could not fire at all. CI evals call
+    #    scripts/eval_judge.py -> scripts/cost_router.py, which does not walk
+    #    degrade_to; only runtime/llm_gateway.py does. So when the account hit
+    #    "credit balance is too low" the gates went dark while this file said
+    #    they would reroute.
+    # 2. Where it COULD fire — agents/judge.py's advisory critique, which does
+    #    go through the gateway — it was masking a bug rather than adding
+    #    resilience. That call's result is discarded (the verdict comes from
+    #    the deterministic citation and parity checks), yet an exception from
+    #    it failed the whole application. The degrade hid that by quietly
+    #    substituting a weaker model to write a critique nobody reads. The call
+    #    is now fail-open, which is the honest fix; degrading was cover.
+    # 3. It named an ACTOR route. `research` is the Groq model the pipeline
+    #    itself uses, so the declared fallback pointed the grader at the side
+    #    of the separation it exists to be independent of.
+    #
+    # The comment also claimed warn_if_judge_not_independent would catch such a
+    # collapse. It cannot: agents/judge.py passes the ids DECLARED in the merged
+    # registry, so it compares configuration and is blind to any substitution at
+    # runtime. It validates this file, not what actually ran.
+    #
+    # Degrading a judge is not like degrading an actor. A weaker actor produces
+    # worse output that a good judge still catches; a weaker judge emits
+    # confident verdicts into the same `score` field, against the same
+    # threshold, gating the same merges, and nothing downstream can tell. Local
+    # judges were measurably unreliable on these very cases — qwen2.5 marked
+    # kyc_012 down for producing identical ratings across nationalities, which
+    # is exactly what policy-007 requires. An unreachable judge now skips the
+    # gate with the provider's message instead (framework run-evals.py), which
+    # is the honest failure: no verdict, rather than a verdict you cannot trust.
