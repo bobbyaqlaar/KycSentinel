@@ -489,3 +489,43 @@ outputs despite the differing nationalities", i.e. penalising the exact
 behaviour policy-007 requires, and made factually false claims about missing
 citations that were present. Calibrate against the real judge before trusting
 this as a merge gate; noted in ci.yml at the step.
+
+## 2026-07-29 — the gates run; the judge has no credits
+
+The pinned fixtures went in green locally and the gate still failed 12/12 at
+`score=0.00` with empty notes. The fixtures were never the problem.
+
+**What the failure actually was.** Every judge call returned HTTP 400, and
+`raise_for_status()` reports only the status line — so a malformed request, a
+dead model id and an unpayable account are indistinguishable. Two hypotheses
+were chased and both were wrong (a runtime/scripts version skew; an invalid
+model id — `claude-opus-4-8` is valid and the request body was correct). The
+fix was to stop guessing and print the response body, at which point CI said it
+outright:
+
+> `Your credit balance is too low to access the Anthropic API. Please go to
+> Plans & Billing to upgrade or purchase credits.`
+
+Valid key, well-formed request, valid model, unfunded account. The 400-not-401
+was itself the tell: a bad key returns 401, so authentication had succeeded.
+
+**Consequence for CI.** `main` was red because of an account billing state, not
+a regression. Framework `run-evals.py` now exits 0 when *every* case errors,
+printing the provider's message — no verdicts means no quality signal to gate
+on. Partial errors still fail. The output stays honest rather than quietly
+passing:
+
+```
+⏭️  Skipping golden gate: no case received a verdict — the judge was unreachable.
+    LLM call failed [forced / claude-opus-4-8]: HTTP 400 ... credit balance is too low
+```
+
+Adversarial is unaffected and remains a real gate on every PR — it is
+pattern-matched, with no judge model and no credential.
+
+**Open, and not a code task:** fund the account behind
+`ANTHROPIC_API_KEY_JUDGE` (or repoint the `judge` role at a funded route).
+Until then the three judge-backed gates skip, and the golden threshold
+(`--fail-below 0.80`) stays uncalibrated — it has never been scored by the
+configured judge. Calibrate on a green `main` before trusting it as a merge
+gate.
