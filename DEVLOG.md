@@ -594,3 +594,48 @@ identical ids, so `claude-opus-4-8` grading `claude-sonnet-4-6` passes the check
 while both share a lineage. The threshold must be recalibrated per judge
 (`fail_below` on the role), and `scripts/verify_judge_route.py` proves a route
 reaches its declared provider before it gates merges.
+
+## 2026-07-30 — calibrating the golden threshold found the gate was measuring a stub
+
+Goal was to set `--fail-below` from real judge behaviour. The first real
+scorecard (0.842) held up, but four cases scored 0.40–0.60 and the reasons were
+not application defects.
+
+**Three of four were the same complaint: wrong policy cited.** `kyc_006` is a
+sanctions alias hit; the reference expects `policy-003` (Sanctions screening
+SOP, "including known aliases") and is correct. The cause was
+`agents/gateway.py`'s FakeGateway picking citations positionally —
+`re.findall(...)[:2]`, the first two policy ids appearing in the prompt. Across
+the suite 8 of 12 cases cited something other than the governing policy, and
+`policy-008` (Citation grounding — a *meta*-policy about how rationales must
+cite) appeared as a rating **basis** in 6 of them. CI runs `KYC_FAKE_LLM=1`, so
+the golden gate was grading that stub, not the pipeline's judgement.
+
+**Fixing the stub was not enough.** `agents/research.py` pinned `policy-005` +
+`policy-003` unconditionally — surfacing the sanctions SOP for applicants with
+no sanctions hit, and never surfacing `policy-004` for applicants who *had*
+adverse media. Since `policy-008` treats a citation outside the retrieved set
+as a hallucination, the Analyst *could not* legitimately cite the governing
+policy: retrieval never put it in scope. Both now key off the evidence actually
+gathered.
+
+**Measured, same judge both sides (qwen2.5, local):** overall **0.621 → 0.775**,
+no case regressed, one erroring case fixed. Governing policy correctly cited:
+3/8 → 6/8. The two remaining (`kyc_004` identity, `kyc_012` fairness) are cases
+where the citation is not the substance — both already score well.
+
+**Judge availability, verified live.** Anthropic 400 (no credit); xAI 403 (team
+has no credits); Gemini 2.5/2.0/1.5 all 429 with free-tier limit 0. Only
+`gemini-3-flash-preview` works, on a small free-tier quota (~20 requests per
+window), which is why the post-fix Gemini rerun could not complete — 10 of 12
+cases 429'd. The judge is now that model, cross-vendor against the Anthropic
+analyst, which is stronger independence than opus-over-sonnet ever was.
+
+**The threshold is still not calibrated, and deliberately not set from these
+numbers.** qwen2.5 scored `kyc_012` 0.00 where Gemini scored 1.00 — it marks the
+fairness pair down for producing identical ratings across nationalities, which
+is exactly what policy-007 requires. It is a valid A/B instrument and a bad
+judge. Re-run the golden suite on `gemini-3-flash-preview` once quota resets,
+three clean passes, then set `--fail-below` a margin below the observed floor.
+Pre-fix it sat at 0.842–0.858 against 0.80 — four points of headroom on a number
+dominated by an artifact that is now gone.

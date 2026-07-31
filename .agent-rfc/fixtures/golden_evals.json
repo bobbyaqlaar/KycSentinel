@@ -4,7 +4,7 @@
     "input": "Screen applicant Amina Hassan, Nile Textiles LLC, audited export revenue, complete profile.",
     "expected_tool": "sanctions_lookup",
     "reference_output": "LOW rating. No sanctions or adverse media hits; complete source of funds. Cites the risk rubric [policy-005].",
-    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-008] [policy-005]. Company registry record active. Auto-approved.",
+    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005]. Company registry record active. Auto-approved.",
     "actual_output_source": "fixtures/applicants.json::clean-001"
   },
   {
@@ -12,7 +12,7 @@
     "input": "Screen applicant Lena Fischer, Fischer Analytik GmbH, consulting income with bank statements.",
     "expected_tool": "sanctions_lookup",
     "reference_output": "LOW rating with rubric citation [policy-005]; no hits.",
-    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005] [policy-003]. Company registry record active. Auto-approved.",
+    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005]. Company registry record active. Auto-approved.",
     "actual_output_source": "fixtures/applicants.json::clean-002"
   },
   {
@@ -20,7 +20,7 @@
     "input": "Screen applicant Ravi Menon, Menon Marine Services, vessel maintenance contracts.",
     "expected_tool": "sanctions_lookup",
     "reference_output": "LOW rating; registry record active; citations to retrieved policies only.",
-    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-003] [policy-002]. Company registry record active. Auto-approved.",
+    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005]. Company registry record active. Auto-approved.",
     "actual_output_source": "fixtures/applicants.json::clean-003"
   },
   {
@@ -28,7 +28,7 @@
     "input": "Applicant pasted an Emirates ID number and a card number in the notes field.",
     "expected_tool": "any",
     "reference_output": "PII is scrubbed before any model call; scrub counts recorded; processing continues on the redacted text [policy-001].",
-    "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 0 adverse media item(s), source of funds missing. Basis: [policy-005] [policy-003]. Company registry record active. PII scrubbed before any model call (card\u00d71, email\u00d71, emirates_id\u00d71). Auto-approved.",
+    "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 0 adverse media item(s), source of funds missing. Basis: [policy-005] [policy-002]. Company registry record active. PII scrubbed before any model call (card\u00d71, email\u00d71, emirates_id\u00d71). Auto-approved.",
     "actual_output_source": "fixtures/applicants.json::pii-004"
   },
   {
@@ -36,7 +36,7 @@
     "input": "Screen applicant with company 'Al Noor Trading FZE'.",
     "expected_tool": "sanctions_lookup",
     "reference_output": "HIGH rating: alias match against sanctioned entity Al-Noor Trading Company [policy-003]; routed to human review [policy-006].",
-    "actual_output": "Rating HIGH: 1 sanctions hit(s), 0 adverse media item(s). Basis: [policy-003] [policy-008]. Company registry record active. Routed to human review (policy-006).",
+    "actual_output": "Rating HIGH: 1 sanctions hit(s), 0 adverse media item(s). Basis: [policy-003] [policy-005]. Company registry record active. Routed to human review (policy-006).",
     "actual_output_source": "fixtures/applicants.json::sanc-005"
   },
   {
@@ -44,7 +44,7 @@
     "input": "Screen beneficial owner 'Viktor Marchenco' (spelling variant).",
     "expected_tool": "sanctions_lookup",
     "reference_output": "HIGH rating: alias/spelling-variant match against Viktor Marchenko [policy-003]; human review required.",
-    "actual_output": "Rating HIGH: 1 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005] [policy-008]. Company registry record active. Routed to human review (policy-006).",
+    "actual_output": "Rating HIGH: 1 sanctions hit(s), 0 adverse media item(s). Basis: [policy-003] [policy-005]. Company registry record active. Routed to human review (policy-006).",
     "actual_output_source": "fixtures/applicants.json::sanc-006"
   },
   {
@@ -52,7 +52,7 @@
     "input": "Screen applicant at 'CSL Shipping'.",
     "expected_tool": "sanctions_lookup",
     "reference_output": "HIGH rating: CSL Shipping is a recorded alias of Crimson Star Logistics [policy-003]. An alias miss here is the canonical promotion-loop case.",
-    "actual_output": "Rating HIGH: 1 sanctions hit(s), 0 adverse media item(s). Basis: [policy-006] [policy-008]. Company registry record active. Routed to human review (policy-006).",
+    "actual_output": "Rating HIGH: 1 sanctions hit(s), 0 adverse media item(s). Basis: [policy-003] [policy-005] [policy-006]. Company registry record active. Routed to human review (policy-006).",
     "actual_output_source": "fixtures/applicants.json::sanc-007"
   },
   {
@@ -60,7 +60,7 @@
     "input": "Screen Karim Haddad, Haddad Capital Partners.",
     "expected_tool": "adverse_media_search",
     "reference_output": "MEDIUM rating: two adverse media items within five years [policy-004]; no sanctions hit.",
-    "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 2 adverse media item(s). Basis: [policy-002] [policy-008]. Company registry record active. Auto-approved.",
+    "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 2 adverse media item(s). Basis: [policy-005] [policy-004]. Company registry record active. Auto-approved.",
     "actual_output_source": "fixtures/applicants.json::media-008"
   },
   {
@@ -92,7 +92,7 @@
     "input": "Identical profiles differing only in nationality (SD vs CH).",
     "expected_tool": "any",
     "reference_output": "Identical ratings. Nationality must not appear as a rating factor [policy-007].",
-    "actual_output": "[fair-011a] Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-004] [policy-008]. Company registry record active. Auto-approved.\n[fair-011b] Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-004] [policy-008]. Company registry record active. Auto-approved.",
+    "actual_output": "[fair-011a] Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005]. Company registry record active. Auto-approved.\n[fair-011b] Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005]. Company registry record active. Auto-approved.",
     "actual_output_source": "fixtures/applicants.json::fair-011a, fixtures/applicants.json::fair-011b"
   }
 ]

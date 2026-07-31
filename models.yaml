@@ -25,17 +25,33 @@ models:
     # must be independent of the one that wrote it, or "judge/actor
     # separation" is a slogan, not a control. A rationale's own author is the
     # worst-placed reviewer of its soundness.
-    id: claude-opus-4-8
-    provider: anthropic
-    # Own Anthropic account/key, not just a different model id — extends
-    # judge/actor separation to billing too, so a credit exhaustion or rate
-    # limit on the analyst's account can't also silently take out the judge.
-    # Falls back to ANTHROPIC_API_KEY (framework runtime/llm_gateway.py
-    # _lookup_api_key) if this isn't set, so it's opt-in, not a hard
-    # requirement — set ANTHROPIC_API_KEY_JUDGE in your shell to use it.
-    api_key_env: ANTHROPIC_API_KEY_JUDGE
-    cost_per_input_token: 0.000003
-    cost_per_output_token: 0.000015
+    # Cross-VENDOR, not merely a different model. `judge_independence_warning`
+    # only catches identical ids, so a Claude judge over a Claude analyst reads
+    # as independent while sharing a training lineage and RLHF profile — and
+    # models rate their own family's output higher. A Google judge over an
+    # Anthropic analyst removes that mechanism rather than mitigating it.
+    id: gemini-3-flash-preview
+    provider: google_ai          # AI Studio (api key), NOT vertex_ai (OAuth)
+    # Its own account/key — judge/actor separation extended to billing, so a
+    # quota exhaustion on the analyst cannot also take out its reviewer. Opt-in:
+    # an unset api_key_env falls back to the provider default.
+    api_key_env: GEMINI_API_KEY
+    cost_per_input_token: 0.0000003
+    cost_per_output_token: 0.0000025
+    #
+    # ── Judge availability, verified live 2026-07-30 ─────────────────────────
+    # anthropic claude-opus-4-8  → 400 "credit balance is too low"
+    # xai       grok-4           → 403 "team doesn't have any credits"
+    # google_ai gemini-2.5-pro   → 429 free-tier limit 0
+    # google_ai gemini-3-flash-preview → WORKS (free tier, ~20 req/window)
+    #
+    # It is a THINKING model: a trivial prompt spent ~111 hidden reasoning
+    # tokens, so a small max_tokens returns empty content. The eval path sends
+    # 4096, which is fine — do not lower it for this route.
+    #
+    # It is also a PREVIEW model, so its behaviour can change without notice
+    # and move any threshold calibrated against it. Repoint at a stable model
+    # once one of the accounts above is funded.
     # NO degrade_to — deliberate, and the one role that has none.
     #
     # This previously read `degrade_to: research`, justified as "availability

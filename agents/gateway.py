@@ -111,7 +111,40 @@ class FakeGateway(_FrameworkFake):
         media = int(self._field(prompt, "adverse_media_count") or 0)
         no_sof = "source_of_funds: missing" in prompt
         rating = "HIGH" if hits else ("MEDIUM" if (media or no_sof) else "LOW")
-        cited = re.findall(r"\[(policy-\d+)\]", prompt)[:2] or ["policy-001"]
+        # Cite the policies that GOVERN this rating, in corpus order.
+        #
+        # This used to be `re.findall(...)[:2]` — the first two policy ids by
+        # position in the prompt. Positional, not semantic, and it made the
+        # golden gate measure the stub rather than the app: 8 of 12 cases cited
+        # something other than the governing policy, and `policy-008`
+        # (Citation grounding — a META-policy about how rationales must cite)
+        # appeared as a rating *basis* in 6 of them, which is a category error
+        # no judge should accept. The three cases where the citation IS the
+        # substance scored 0.40–0.50 against references that name the correct
+        # policy, so the scorecard was reporting a fixture artefact as an
+        # application defect.
+        #
+        # A real analyst is instructed to cite the policy it applied, so this
+        # raises the stub's fidelity rather than teaching to the test — the
+        # mapping is read straight from corpus/policies.json:
+        #   policy-002 source of funds · policy-003 sanctions SOP (incl aliases)
+        #   policy-004 adverse media   · policy-005 risk rating rubric
+        #   policy-006 human review (HITL)
+        cited = ["policy-005"]  # the rubric is the basis for every rating
+        if hits:
+            cited.insert(0, "policy-003")  # sanctions hit — the governing SOP
+        if media:
+            cited.append("policy-004")
+        if no_sof:
+            cited.append("policy-002")
+        if rating == "HIGH":
+            cited.append("policy-006")  # routed to human review
+        # Only cite what was actually retrieved: policy-008 treats a citation
+        # outside the retrieved set as a hallucination, and the judge enforces
+        # it (agents/judge.py check_citations).
+        retrieved = set(re.findall(r"\[(policy-\d+)\]", prompt))
+        if retrieved:
+            cited = [c for c in cited if c in retrieved] or sorted(retrieved)[:1]
         if "CITE_GHOST_TRIGGER" in prompt:
             cited = ["policy-999"]  # F7: not in the retrieved set
         rationale = (

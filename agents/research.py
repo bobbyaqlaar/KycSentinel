@@ -63,9 +63,30 @@ async def run_research(gateway, profile: ApplicantProfile, k: int = 4) -> Resear
         f"{profile.role} {profile.company_name}"
     )
     hits = policy_store().query(query, k=k)
-    # policy-005 (rubric) and policy-003 (sanctions SOP) are always relevant
-    # to a rating decision — pin them into the retrieved set.
-    ids = list(dict.fromkeys([h.id for h in hits] + ["policy-005", "policy-003"]))
+    # Pin the policies that GOVERN the evidence actually gathered, not a fixed
+    # pair. This used to pin policy-005 + policy-003 unconditionally, which was
+    # wrong in both directions: it surfaced the sanctions SOP for applicants
+    # with no sanctions hit, and never surfaced the adverse-media policy for
+    # applicants who HAD adverse media.
+    #
+    # That second half made a correct citation impossible rather than merely
+    # unlikely: policy-008 treats a citation outside the retrieved set as a
+    # hallucination, and agents/judge.py enforces it — so the Analyst could not
+    # legitimately cite policy-004 for an adverse-media rating, because
+    # retrieval never put it in scope. The golden fixtures expect exactly that
+    # citation (kyc_008), and the gate reported the gap as an Analyst failure.
+    #
+    # Surfaced by calibrating the golden threshold: fixing the fake gateway's
+    # citation selection was not enough, because the retrieved set it filters
+    # against did not contain the policy the rating rests on.
+    governing = ["policy-005"]  # the rubric underpins every rating
+    if sanctions:
+        governing.append("policy-003")  # sanctions screening SOP (incl. aliases)
+    if media:
+        governing.append("policy-004")  # adverse media
+    if (profile.source_of_funds or "").strip().lower() in ("", "missing", "unknown"):
+        governing.append("policy-002")  # source of funds
+    ids = list(dict.fromkeys([h.id for h in hits] + governing))
     snippets = [h.text for h in hits]
 
     # The Research agent's OWN LLM call — the Groq cheap-tier route
