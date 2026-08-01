@@ -687,3 +687,42 @@ citation is separately and deterministically covered by `check_citations`.
 
 Still open: two more clean passes to confirm the 0.967 floor and tighten toward
 0.95; xAI and Anthropic accounts remain unfunded.
+
+## 2026-08-02 — models.yaml converted to catalog + profiles
+
+Same shape as the framework: `catalog:` for model references, `profiles:` for
+role bindings. Resolution is **byte-identical** to the previous flat file for
+all 8 roles — verified by diffing the merged registry before and after.
+
+`default_profile: hybrid`, deliberately not the framework's `local`:
+multi-vendor routing is what this testbed exists to exercise (RFC-002), and the
+eval baselines are measured against these routes. Inheriting the framework
+default would move every role onto local models and quietly invalidate the
+calibrated thresholds.
+
+`intake` is local in both profiles and never degrades. That is the sovereignty
+control rather than a performance choice — raw applicant text reaches that role
+before the PII scrub runs, so the route stays in-border by construction.
+
+`fail_below` moved onto the judge **binding** rather than the catalog entry. It
+is calibrated for one grader against one fixture set, so it belongs where the
+grader is chosen: rebind the judge and the threshold goes with the binding
+instead of silently grading a new model against the old one's calibration.
+
+**Removed `routing_overrides` from tenant.yaml.** They restated all four roles —
+redundant while models.yaml was flat, and actively harmful once it gained
+profiles. An override sets ONLY the `id`, leaving `provider` from whichever
+profile is active, so selecting `local` produced `id: claude-sonnet-4-6` on
+`provider: ollama`: Anthropic, Groq and Google model names pointed at
+localhost, 404 on every call, from a config that reads as correct. Verified
+before removing, and verified coherent after. The mechanism stays available as
+a genuine shorthand for swapping a model on the *same* provider; a
+cross-provider change needs a catalog entry, because only that carries the
+provider alongside the id.
+
+A `local` profile now exists for fully offline operation — every role on
+Ollama, no key, no egress. Distinct from `KYC_FAKE_LLM=1`, which replaces the
+gateway with a deterministic stub and calls no model at all. It is uncalibrated
+and quality-untested: the prompts were written for the hybrid routes, and local
+judges proved measurably unreliable on these cases. Use it to check the
+pipeline runs, not to gate merges.

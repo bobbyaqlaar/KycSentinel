@@ -9,14 +9,23 @@ framework:
   version: "1.1.x"
 
 gateway:
-  # Per-agent model routes (overrides framework runtime/models.yaml roles).
-  # Multi-LLM is structural: sovereign-local for PII, cheap cloud for
-  # volume, frontier for judgment, independent judge (RFC-002).
-  routing_overrides:
-    intake: falcon3:3b
-    research: llama-3.3-70b-versatile
-    analyst: claude-sonnet-4-6
-    judge: gemini-3-flash-preview   # cross-vendor judge; see models.yaml
+  # Per-agent model routes live in models.yaml's `profiles:` block, not here.
+  #
+  # routing_overrides used to restate all four roles, which was redundant while
+  # models.yaml was flat and became actively harmful once it gained profiles:
+  # an override sets ONLY the `id`, leaving `provider`/`endpoint`/cost from
+  # whichever profile is active. Selecting `local` therefore produced
+  # `id: claude-sonnet-4-6` on `provider: ollama` — a Groq/Anthropic/Google
+  # model name pointed at localhost, 404 on every call, from a config that
+  # reads as correct. Verified before removing them.
+  #
+  # It remains available as a genuine SHORTHAND: swapping one role to another
+  # model on the SAME provider, without copying a whole registry. A
+  # cross-provider change needs a catalog entry and a profile binding, because
+  # only those can carry the provider with the id.
+  #
+  # Multi-LLM is structural here: sovereign-local for PII, cheap cloud for
+  # volume, frontier for judgment, independent cross-vendor judge (RFC-002).
 
 moderation:
   # Declared so BOTH the runtime (auto-registers at first use) and the

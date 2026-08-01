@@ -1,47 +1,128 @@
 # KYC Sentinel — tenant model registry (merged over framework runtime/models.yaml).
-# Roles match gateway.routing_overrides in .agenticframework/tenant.yaml.
+#
+# Catalog + profiles, matching the framework shape:
+#   catalog:   every model this tenant can reach. Presence routes nothing.
+#   profiles:  role → alias bindings. Two, mirroring `ai-mode-local` /
+#              `ai-mode-hybrid`; a profile the mode switch cannot select would
+#              be unreachable through the documented interface.
+#
+# default_profile is `hybrid`, NOT the framework's `local`: multi-vendor routing
+# is what this testbed exists to exercise (RFC-002), and CI/eval baselines are
+# measured against these routes. The framework default would silently move
+# every role onto local models and invalidate the calibrated thresholds below.
+#
+# `intake` is local in BOTH profiles and never degrades. That is the
+# sovereignty control, not a performance choice: raw applicant text reaches
+# this role before the PII scrub runs, so the route must stay in-border by
+# construction rather than by configuration discipline.
+#
 # degrade_to chains implement the F5 ladder: analyst frontier → groq → local.
-models:
-  intake:
-    id: falcon3:3b
-    provider: ollama            # sovereign / in-border — PII never leaves
+
+default_profile: hybrid
+
+catalog:
+
+  # ── Local / sovereign (Ollama) ────────────────────────────────────────────
+  "falcon3:3b":
+    provider: ollama
     cost_per_input_token: 0.0
     cost_per_output_token: 0.0
-    degrade_to: null            # PII route must not degrade to a cloud model
-  research:
-    id: llama-3.3-70b-versatile
+  "llama3.2:3b":
+    provider: ollama
+    cost_per_input_token: 0.0
+    cost_per_output_token: 0.0
+  qwen2.5:
+    provider: ollama
+    cost_per_input_token: 0.0
+    cost_per_output_token: 0.0
+
+  # ── Groq — high-volume retrieval and tool loops on the cheap tier ─────────
+  llama-3.3-70b-versatile:
     provider: groq
     cost_per_input_token: 0.00000059
     cost_per_output_token: 0.00000079
-    degrade_to: intake
-  analyst:
-    id: claude-sonnet-4-6
+
+  # ── Anthropic — the one expensive judgement call ──────────────────────────
+  claude-sonnet-4-6:
     provider: anthropic
     cost_per_input_token: 0.000003
     cost_per_output_token: 0.000015
-    degrade_to: research        # F5: frontier → groq → local
-  judge:
+
+  # ── Google AI Studio (api key), NOT vertex_ai (service-account OAuth) ─────
+  gemini-3-flash-preview:
+    provider: google_ai
+    # Its own account/key — judge/actor separation extended to billing, so a
+    # quota exhaustion on the analyst cannot also take out its reviewer.
+    # Opt-in: an unset api_key_env falls back to the provider default.
+    api_key_env: GEMINI_API_KEY
+    cost_per_input_token: 0.0000003
+    cost_per_output_token: 0.0000025
+    #
+    # ── Judge availability, verified live 2026-07-30 ───────────────────────
+    # anthropic claude-opus-4-8        → 400 "credit balance is too low"
+    # xai       grok-4                 → 403 "team doesn't have any credits"
+    # google_ai gemini-2.5-pro         → 429 free-tier limit 0
+    # google_ai gemini-3-flash-preview → WORKS (free tier, ~20 req/window)
+    #
+    # A THINKING model: a trivial prompt spent ~111 hidden reasoning tokens,
+    # so a small max_tokens returns empty content. The eval path sends 4096,
+    # which is fine — do not lower it for this route.
+    #
+    # Also a PREVIEW model: its behaviour can change without notice and move
+    # any threshold calibrated against it. Repoint at a stable model once one
+    # of the accounts above is funded.
+
+  # Present but unbound — the judge this tenant used until its account ran dry.
+  # Kept so repointing is a one-line binding change rather than re-deriving the
+  # entry, which is the whole point of separating catalog from profiles.
+  claude-opus-4-8:
+    provider: anthropic
+    api_key_env: ANTHROPIC_API_KEY_JUDGE
+    cost_per_input_token: 0.000003
+    cost_per_output_token: 0.000015
+
+profiles:
+
+  # PRODUCTION ROUTES. What CI, the eval baselines and RFC-002 describe.
+  hybrid:
+    # Sovereign / in-border — PII never leaves. degrade_to: null is load-bearing:
+    # a PII route must not fail over to a cloud model.
+    intake: {use: "falcon3:3b", degrade_to: null}
+    research: {use: llama-3.3-70b-versatile, degrade_to: intake}
+    analyst: {use: claude-sonnet-4-6, degrade_to: research}
     # Distinct from the analyst (E3 / RFC-002): the model grading a rationale
-    # must be independent of the one that wrote it, or "judge/actor
-    # separation" is a slogan, not a control. A rationale's own author is the
-    # worst-placed reviewer of its soundness.
-    # Cross-VENDOR, not merely a different model. `judge_independence_warning`
+    # must be independent of the one that wrote it, or "judge/actor separation"
+    # is a slogan, not a control. A rationale's own author is the worst-placed
+    # reviewer of its soundness.
+    #
+    # Cross-VENDOR, not merely a different model. judge_independence_warning
     # only catches identical ids, so a Claude judge over a Claude analyst reads
     # as independent while sharing a training lineage and RLHF profile — and
     # models rate their own family's output higher. A Google judge over an
     # Anthropic analyst removes that mechanism rather than mitigating it.
-    id: gemini-3-flash-preview
-    provider: google_ai          # AI Studio (api key), NOT vertex_ai (OAuth)
-    # Its own account/key — judge/actor separation extended to billing, so a
-    # quota exhaustion on the analyst cannot also take out its reviewer. Opt-in:
-    # an unset api_key_env falls back to the provider default.
-    api_key_env: GEMINI_API_KEY
-    cost_per_input_token: 0.0000003
-    cost_per_output_token: 0.0000025
-    # ── Calibrated thresholds, measured against THIS judge ───────────────────
+    #
+    # NO degrade_to — the one role that has none. It previously read
+    # `degrade_to: research`, which was wrong three ways: on the path that gates
+    # merges it could not fire at all (CI evals go through
+    # scripts/cost_router.py, which does not walk the chain); where it COULD
+    # fire it masked a bug rather than adding resilience (agents/judge.py's
+    # advisory critique had its result discarded yet failed the whole
+    # application on error — now fail-open); and `research` is an ACTOR route,
+    # so the declared fallback pointed the grader at the side of the separation
+    # it exists to be independent of.
+    #
+    # A weaker actor produces worse output that a good judge still catches; a
+    # weaker judge emits confident verdicts into the same `score` field, against
+    # the same threshold, gating the same merges, and nothing downstream can
+    # tell. An unreachable judge now skips the gate with the provider's message
+    # instead — no verdict, rather than a verdict you cannot trust.
+    #
+    # ── Calibrated thresholds, measured against THIS judge ─────────────────
     # A score is only comparable to a threshold set for the grader that
-    # produced it, which is why these live on the role rather than in CI YAML:
-    # repoint the judge and the numbers travel with it (or stop applying).
+    # produced it, which is why these sit on the BINDING rather than on the
+    # catalog entry or in CI YAML: rebind the judge and the numbers go with the
+    # binding instead of silently grading a new model against the old one's
+    # calibration.
     #
     # Measured 2026-07-30 on gemini-3-flash-preview:
     #   pre-fix   0.842, 0.858   (two clean passes; run-to-run spread 0.016)
@@ -49,61 +130,29 @@ models:
     # The lift is the citation work — the suite previously scored a stub's
     # positional [:2] slice rather than the pipeline's reasoning.
     #
-    # 0.90 sits ~0.07 under the observed score: comfortably above the 0.85
-    # pre-fix regime, so a regression to the old citation behaviour fails,
-    # and loose enough to absorb several times the observed judge variance.
-    # Only ONE clean post-fix pass was possible — the free tier allows roughly
-    # one 12-case run per window — so this is deliberately not tighter. Take
-    # two more clean passes and raise it toward 0.95 if the floor holds.
-    fail_below:
-      golden: 0.90
-      fairness: 0.90
-    #
-    # ── Judge availability, verified live 2026-07-30 ─────────────────────────
-    # anthropic claude-opus-4-8  → 400 "credit balance is too low"
-    # xai       grok-4           → 403 "team doesn't have any credits"
-    # google_ai gemini-2.5-pro   → 429 free-tier limit 0
-    # google_ai gemini-3-flash-preview → WORKS (free tier, ~20 req/window)
-    #
-    # It is a THINKING model: a trivial prompt spent ~111 hidden reasoning
-    # tokens, so a small max_tokens returns empty content. The eval path sends
-    # 4096, which is fine — do not lower it for this route.
-    #
-    # It is also a PREVIEW model, so its behaviour can change without notice
-    # and move any threshold calibrated against it. Repoint at a stable model
-    # once one of the accounts above is funded.
-    # NO degrade_to — deliberate, and the one role that has none.
-    #
-    # This previously read `degrade_to: research`, justified as "availability
-    # wins over strict separation". Two things were wrong with that.
-    #
-    # 1. On the path that gates merges it could not fire at all. CI evals call
-    #    scripts/eval_judge.py -> scripts/cost_router.py, which does not walk
-    #    degrade_to; only runtime/llm_gateway.py does. So when the account hit
-    #    "credit balance is too low" the gates went dark while this file said
-    #    they would reroute.
-    # 2. Where it COULD fire — agents/judge.py's advisory critique, which does
-    #    go through the gateway — it was masking a bug rather than adding
-    #    resilience. That call's result is discarded (the verdict comes from
-    #    the deterministic citation and parity checks), yet an exception from
-    #    it failed the whole application. The degrade hid that by quietly
-    #    substituting a weaker model to write a critique nobody reads. The call
-    #    is now fail-open, which is the honest fix; degrading was cover.
-    # 3. It named an ACTOR route. `research` is the Groq model the pipeline
-    #    itself uses, so the declared fallback pointed the grader at the side
-    #    of the separation it exists to be independent of.
-    #
-    # The comment also claimed warn_if_judge_not_independent would catch such a
-    # collapse. It cannot: agents/judge.py passes the ids DECLARED in the merged
-    # registry, so it compares configuration and is blind to any substitution at
-    # runtime. It validates this file, not what actually ran.
-    #
-    # Degrading a judge is not like degrading an actor. A weaker actor produces
-    # worse output that a good judge still catches; a weaker judge emits
-    # confident verdicts into the same `score` field, against the same
-    # threshold, gating the same merges, and nothing downstream can tell. Local
-    # judges were measurably unreliable on these very cases — qwen2.5 marked
-    # kyc_012 down for producing identical ratings across nationalities, which
-    # is exactly what policy-007 requires. An unreachable judge now skips the
-    # gate with the provider's message instead (framework run-evals.py), which
-    # is the honest failure: no verdict, rather than a verdict you cannot trust.
+    # 0.90 sits ~0.07 under the observed score: above the 0.85 pre-fix regime,
+    # so a regression to the old citation behaviour fails, and loose enough to
+    # absorb several times the observed judge variance. Only ONE clean post-fix
+    # pass was possible (the free tier allows roughly one 12-case run per
+    # window), so it is deliberately not tighter. Two more clean passes justify
+    # raising it toward 0.95.
+    judge:
+      use: gemini-3-flash-preview
+      fail_below: {golden: 0.90, fairness: 0.90}
+
+  # FULLY OFFLINE. Every role on Ollama — no key, no egress, nothing billable.
+  # For sovereign / air-gapped operation and for exercising the real pipeline
+  # without credentials (distinct from KYC_FAKE_LLM=1, which replaces the
+  # gateway with a deterministic stub and calls no model at all).
+  #
+  # UNCALIBRATED and quality-untested: the prompts were written for the hybrid
+  # routes, and the thresholds above do NOT apply here — local judges proved
+  # measurably unreliable on these very cases (qwen2.5 marked kyc_012 down for
+  # producing identical ratings across nationalities, which is exactly what
+  # policy-007 requires). Use it to check the pipeline runs, not to gate merges.
+  local:
+    intake: {use: "falcon3:3b", degrade_to: null}
+    research: {use: "llama3.2:3b", degrade_to: intake}
+    analyst: {use: qwen2.5, degrade_to: research}
+    # Independent of the analyst (qwen2.5) even offline.
+    judge: {use: "falcon3:3b"}
