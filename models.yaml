@@ -36,13 +36,38 @@ catalog:
     cost_per_input_token: 0.0
     cost_per_output_token: 0.0
 
-  # ── Groq — high-volume retrieval and tool loops on the cheap tier ─────────
+  # ── OpenRouter — the live routes ──────────────────────────────────────────
+  # One OpenAI-compatible endpoint fronting both vendors, so one credential
+  # covers research and analyst. Ids and pricing verified against
+  # https://openrouter.ai/api/v1/models on 2026-08-02, and both round-tripped
+  # a live call before being bound here.
+  #
+  # `api_format: openai_chat` is load-bearing on the analyst entry: this IS
+  # Claude, but reached in OpenAI shape. Inferring the envelope from the vendor
+  # in the id would build an Anthropic Messages request against an
+  # OpenAI-compatible endpoint and then parse the wrong response fields.
+  openrouter-llama-70b:
+    id: meta-llama/llama-3.3-70b-instruct
+    provider: openrouter
+    api_format: openai_chat
+    cost_per_input_token: 0.00000013    # $0.13 / M — ~4.5x cheaper than Groq's route
+    cost_per_output_token: 0.0000004    # $0.40 / M
+  openrouter-claude-sonnet:
+    id: anthropic/claude-sonnet-4.5
+    provider: openrouter
+    api_format: openai_chat
+    cost_per_input_token: 0.000003      # $3 / M — same as Anthropic direct
+    cost_per_output_token: 0.000015     # $15 / M
+
+  # ── Present but unbound: the direct routes these replaced ─────────────────
+  # Both credentials were rejected on 2026-08-02 — Groq 403 (error 1010) and
+  # Anthropic 401 ("API key is invalid", not a billing error). Kept in the
+  # catalog so restoring either is a one-line binding change once its account
+  # is working, which is exactly what separating catalog from profiles buys.
   llama-3.3-70b-versatile:
     provider: groq
     cost_per_input_token: 0.00000059
     cost_per_output_token: 0.00000079
-
-  # ── Anthropic — the one expensive judgement call ──────────────────────────
   claude-sonnet-4-6:
     provider: anthropic
     cost_per_input_token: 0.000003
@@ -88,8 +113,8 @@ profiles:
     # Sovereign / in-border — PII never leaves. degrade_to: null is load-bearing:
     # a PII route must not fail over to a cloud model.
     intake: {use: "falcon3:3b", degrade_to: null}
-    research: {use: llama-3.3-70b-versatile, degrade_to: intake}
-    analyst: {use: claude-sonnet-4-6, degrade_to: research}
+    research: {use: openrouter-llama-70b, degrade_to: intake}
+    analyst: {use: openrouter-claude-sonnet, degrade_to: research}
     # Distinct from the analyst (E3 / RFC-002): the model grading a rationale
     # must be independent of the one that wrote it, or "judge/actor separation"
     # is a slogan, not a control. A rationale's own author is the worst-placed

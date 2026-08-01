@@ -726,3 +726,45 @@ gateway with a deterministic stub and calls no model at all. It is uncalibrated
 and quality-untested: the prompts were written for the hybrid routes, and local
 judges proved measurably unreliable on these cases. Use it to check the
 pipeline runs, not to gate merges.
+
+## 2026-08-02 — research and analyst rebound to OpenRouter
+
+Credential probes found only two of the configured keys working: OpenRouter and
+Google AI Studio. Anthropic returned **401 "API key is invalid"** (not a
+billing error — a different, longer key than the framework's, which itself
+authenticates fine), and Groq returned **403 error 1010** in both repos, so the
+credential rather than anything local. That left `research` and `analyst`
+unable to call anything.
+
+Both now route through OpenRouter, which fronts the same vendors on one
+credential that works:
+
+    research  meta-llama/llama-3.3-70b-instruct   $0.13/M in  (~4.5x cheaper than the Groq route)
+    analyst   anthropic/claude-sonnet-4.5         $3/M in     (same as Anthropic direct)
+
+Ids and pricing verified against the live model list, and both round-tripped a
+real call before being bound. `api_format: openai_chat` is load-bearing on the
+analyst entry: it is Claude, but reached in OpenAI shape — inferring the
+envelope from the vendor in the id would build an Anthropic Messages request
+against an OpenAI-compatible endpoint. The profile now needs exactly two
+credentials, `OPENROUTER_API_KEY` and `GEMINI_API_KEY`.
+
+The Groq and Anthropic entries stay in the catalog, unbound. Restoring either
+is a one-line binding change once its account works — which is the whole point
+of separating catalog from profiles.
+
+**First live end-to-end run of the real pipeline**, and it exercised three
+fixes from this session at once:
+
+- The analyst hit OpenRouter's 402 ("requires more credits"), which matched no
+  exhaustion marker, so the ladder did NOT fire and the call hard-failed.
+  Fixed framework-side; the rerun then logged `Degraded from 'analyst' to
+  'research'` correctly.
+- The judge hit Gemini's 429 and correctly found no next tier — it is the one
+  role with no `degrade_to`.
+- The advisory judge critique then failed **open**: "citation and parity checks
+  still applied; verdict unaffected". Before this session that exception would
+  have failed the whole application.
+
+Final result: a real LOW rating with a model-authored rationale, from live
+models, with every resilience control behaving as designed.
