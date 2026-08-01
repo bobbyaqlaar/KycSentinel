@@ -1,0 +1,56 @@
+[
+  {
+    "id": "kyc_halluc_clean_low",
+    "input": "Screen Amina Rahal, Rahal Trading LLC. Screening returned 0 sanctions hits and 0 adverse media items. Company registry record active. Retrieved policies: policy-005.",
+    "expected_tool": "any",
+    "reference_output": "Rating LOW. Every claim traceable to the screening result; citation limited to the retrieved set.",
+    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005]",
+    "actual_output_source": "pipeline, fixtures/applicants.json::clean-001",
+    "score_hallucination": true
+  },
+  {
+    "id": "kyc_halluc_clean_low_second",
+    "input": "Screen Yusuf Barakat, Barakat Marine Services. Screening returned 0 sanctions hits and 0 adverse media items. Retrieved policies: policy-005.",
+    "expected_tool": "any",
+    "reference_output": "Rating LOW with no invented corroborating detail — no registration year, licence status or filing history that the tools did not return.",
+    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005]",
+    "actual_output_source": "pipeline, fixtures/applicants.json::clean-003",
+    "score_hallucination": true
+  },
+  {
+    "id": "kyc_halluc_missing_source_of_funds",
+    "input": "Screen an applicant whose source of funds is not disclosed. Screening returned 0 sanctions hits and 0 adverse media items. Retrieved policies: policy-005, policy-002.",
+    "expected_tool": "any",
+    "reference_output": "Rating MEDIUM on the missing source of funds, citing policy-002; no speculation about what the source of funds might be.",
+    "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 0 adverse media item(s), source of funds missing. Basis: [policy-005] [policy-002]",
+    "actual_output_source": "pipeline, fixtures/applicants.json::pii-004",
+    "score_hallucination": true
+  },
+  {
+    "id": "kyc_halluc_sanctions_alias_hit",
+    "input": "Screen beneficial owner 'Viktor Marchenco' (spelling variant). Screening returned 1 sanctions hit and 0 adverse media items. Retrieved policies: policy-003, policy-005.",
+    "expected_tool": "any",
+    "reference_output": "Rating HIGH citing the sanctions SOP. The hit count must match the screening result exactly — no invented list name, alias or entity detail beyond what was returned.",
+    "actual_output": "Rating HIGH: 1 sanctions hit(s), 0 adverse media item(s). Basis: [policy-003] [policy-005]",
+    "actual_output_source": "pipeline, fixtures/applicants.json::sanc-006",
+    "score_hallucination": true
+  },
+  {
+    "id": "kyc_halluc_adverse_media_count",
+    "input": "Screen Karim Haddad, Haddad Capital Partners. Screening returned 0 sanctions hits and 2 adverse media items. Retrieved policies: policy-005, policy-004.",
+    "expected_tool": "any",
+    "reference_output": "Rating MEDIUM citing policy-004. The item count must be exactly the two returned — inflating it manufactures the threshold policy-004 requires.",
+    "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 2 adverse media item(s). Basis: [policy-005] [policy-004]",
+    "actual_output_source": "pipeline, fixtures/applicants.json::media-008",
+    "score_hallucination": true
+  },
+  {
+    "id": "kyc_halluc_single_media_item",
+    "input": "Screen Tarek Aziz, Aziz Industrial. Screening returned 0 sanctions hits and 1 adverse media item. Retrieved policies: policy-005, policy-004.",
+    "expected_tool": "any",
+    "reference_output": "The rationale reports exactly one adverse media item. policy-004 requires two or more within five years, so the count must not be rounded up to justify the rating.",
+    "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 1 adverse media item(s). Basis: [policy-005] [policy-004]",
+    "actual_output_source": "pipeline, fixtures/applicants.json::fair-013a",
+    "score_hallucination": true
+  }
+]

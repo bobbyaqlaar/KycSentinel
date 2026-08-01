@@ -38,6 +38,26 @@ models:
     api_key_env: GEMINI_API_KEY
     cost_per_input_token: 0.0000003
     cost_per_output_token: 0.0000025
+    # ── Calibrated thresholds, measured against THIS judge ───────────────────
+    # A score is only comparable to a threshold set for the grader that
+    # produced it, which is why these live on the role rather than in CI YAML:
+    # repoint the judge and the numbers travel with it (or stop applying).
+    #
+    # Measured 2026-07-30 on gemini-3-flash-preview:
+    #   pre-fix   0.842, 0.858   (two clean passes; run-to-run spread 0.016)
+    #   post-fix  0.967          (one clean pass, 11 of 12 cases at 1.00)
+    # The lift is the citation work — the suite previously scored a stub's
+    # positional [:2] slice rather than the pipeline's reasoning.
+    #
+    # 0.90 sits ~0.07 under the observed score: comfortably above the 0.85
+    # pre-fix regime, so a regression to the old citation behaviour fails,
+    # and loose enough to absorb several times the observed judge variance.
+    # Only ONE clean post-fix pass was possible — the free tier allows roughly
+    # one 12-case run per window — so this is deliberately not tighter. Take
+    # two more clean passes and raise it toward 0.95 if the floor holds.
+    fail_below:
+      golden: 0.90
+      fairness: 0.90
     #
     # ── Judge availability, verified live 2026-07-30 ─────────────────────────
     # anthropic claude-opus-4-8  → 400 "credit balance is too low"

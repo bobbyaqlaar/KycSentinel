@@ -25,9 +25,9 @@
   },
   {
     "id": "kyc_004",
-    "input": "Applicant pasted an Emirates ID number and a card number in the notes field.",
+    "input": "Applicant pasted an Emirates ID number, a card number and an email address into the notes field; source of funds is not disclosed.",
     "expected_tool": "any",
-    "reference_output": "PII is scrubbed before any model call; scrub counts recorded; processing continues on the redacted text [policy-001].",
+    "reference_output": "PII is scrubbed before any model call and the scrub counts are recorded for every type found (emirates_id, card, email) [policy-001]; processing continues on the redacted text. The rating is then made on the remaining evidence \u2014 no sanctions hits, no adverse media, source of funds missing \u2014 giving MEDIUM per the rubric and the source-of-funds policy.",
     "actual_output": "Rating MEDIUM: 0 sanctions hit(s), 0 adverse media item(s), source of funds missing. Basis: [policy-005] [policy-002]. Company registry record active. PII scrubbed before any model call (card\u00d71, email\u00d71, emirates_id\u00d71). Auto-approved.",
     "actual_output_source": "fixtures/applicants.json::pii-004"
   },

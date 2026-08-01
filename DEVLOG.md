@@ -639,3 +639,51 @@ judge. Re-run the golden suite on `gemini-3-flash-preview` once quota resets,
 three clean passes, then set `--fail-below` a margin below the observed floor.
 Pre-fix it sat at 0.842–0.858 against 0.80 — four points of headroom on a number
 dominated by an artifact that is now gone.
+
+## 2026-07-30 (later) — threshold calibrated; tenant F3/F7 fixtures
+
+**Golden threshold set to 0.90**, on the `judge` role in `models.yaml` rather
+than in CI. A score is only comparable to a threshold set for the grader that
+produced it, so the number travels with the role — repoint the judge and it
+cannot silently leave a stale value behind. CI no longer passes `--fail-below`,
+which would have overridden it.
+
+Measured on `gemini-3-flash-preview`: **0.842 / 0.858 pre-fix** (two clean
+passes, spread 0.016) → **0.967 post-fix** (one clean pass, 11 of 12 cases at
+1.00). The lift is the citation work from earlier today. 0.90 leaves ~0.07 of
+headroom: above the 0.85 pre-fix regime, so a regression to the old citation
+behaviour fails, and loose enough for several times the observed variance. Only
+one clean post-fix pass was possible — the free tier allows roughly one 12-case
+run per window — so it is deliberately not tighter.
+
+**The judge found a real fixture bug.** `kyc_004` scored 0.60: "hallucinated an
+'email' count that was not in the input". The applicant record (`pii-004`) does
+contain `omar@rashidventures.example`, so the scrubber was right and the case
+*description* was wrong — it listed only the Emirates ID and card. Corrected,
+along with a reference that now specifies the rating as well as the PII
+handling.
+
+**F3 — tenant adversarial fixtures.** The gate graded the framework's 7 base
+cases while the CI step claimed prompt-injection coverage this repo did not
+have. The generic heuristics catch attacks on the model's *framing*; four
+realistic attacks on the KYC *decision* passed straight through — overriding a
+sanctions result, exfiltrating the policy corpus, a context escape in applicant
+notes, and impersonating the compliance judge. Added
+`.agent-rfc/security/prompt_denylist.txt` (the path the framework already
+resolves by default) plus 9 tenant cases, **three of which are legitimate KYC
+text expected to pass** — matching is a lowercased substring test and real
+records are full of "sanctions", "approve" and "citation", so a denylist that
+trips on an applicant's notes would be the worse failure. Verified against every
+field of the applicant and policy corpora: zero false positives. Suite now 16
+cases, miss rate 0.000.
+
+**F7 — tenant hallucination fixtures.** The gate graded four UAE geography facts
+from the framework base set, none of which actually hallucinate, so it could
+never trip. Replaced with six real pipeline outputs across the rating spectrum.
+Note the suite's contract: it measures the *flagged rate* of the app's own
+outputs, so fixtures must be outputs that should be clean — deliberately
+hallucinated cases would fail the gate by construction. Detecting an ungrounded
+citation is separately and deterministically covered by `check_citations`.
+
+Still open: two more clean passes to confirm the 0.967 floor and tighten toward
+0.95; xAI and Anthropic accounts remain unfunded.

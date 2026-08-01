@@ -100,14 +100,12 @@ jobs:
       # passed through below because YAML cannot look up a secret by a name
       # computed at runtime; the DECISION lives in code that can read
       # models.yaml. Suites with too few cases also skip gracefully (exit 0).
-      # THRESHOLD IS UNCALIBRATED. 0.80 is the framework default, never
-      # validated against this repo's configured judge (claude-opus-4-8) — the
-      # only judges these cases have been scored by are local Ollama models,
-      # and they were unreliable enough to mark kyc_012 down for producing
-      # "identical outputs despite differing nationalities", which is exactly
-      # what policy-007 requires. Before trusting this as a merge gate: set the
-      # judge credential, run it a few times on a green main, and set the
-      # threshold from what a passing run actually scores.
+      # THRESHOLD IS CALIBRATED and lives on the `judge` role in models.yaml,
+      # not here. It was measured against the grader that produced it
+      # (gemini-3-flash-preview, 2026-07-30) and travels with that role, so
+      # repointing the judge cannot silently leave a stale number behind.
+      # Passing --fail-below here would override it — that is why these steps
+      # no longer do. Provenance and the measured numbers: models.yaml.
       - name: "Eval: golden scorecard"
         working-directory: KYC_Sentinel
         env:
@@ -118,7 +116,7 @@ jobs:
           AGENT_OWNER_ID:           ci@kyc-sentinel
         run: >-
           python3 $AGENTSMITH_DIR/scripts/run-evals.py
-          --fail-below 0.80 --skip-without-judge-credentials
+          --skip-without-judge-credentials
 
       - name: "Eval: fairness pair parity (policy-007)"
         working-directory: KYC_Sentinel
