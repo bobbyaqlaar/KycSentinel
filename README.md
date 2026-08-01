@@ -10,9 +10,15 @@ exercised by an observable scenario. Canonical spec:
 ## Agents & routes (RFC-002)
 
 Intake (Falcon 3 @ Ollama, sovereign — PII scrubbed *before* parse) →
-Research (Groq, RAG + strict-allowlisted tools) → Analyst (Claude frontier,
-streamed, degrade ladder → Groq → local) → Judge (independent judge route:
-citation grounding + pair parity) → auto-approve (LOW) or HITL (HIGH/flag).
+Research (Llama 3.3 70B @ OpenRouter, RAG + strict-allowlisted tools) →
+Analyst (Claude Sonnet 4.5 @ OpenRouter, streamed, degrade ladder → research →
+intake) → Judge (Gemini @ Google AI Studio — cross-vendor: citation grounding,
+evidence-mandated rating floor, pair parity) → auto-approve (LOW) or HITL
+(HIGH / flagged).
+
+Routes are declared per profile in `models.yaml`; `hybrid` is the default and
+`local` runs every role on Ollama. Two credentials: `OPENROUTER_API_KEY` and
+`GEMINI_API_KEY`.
 
 ## Quick start (offline — zero keys, zero infra)
 

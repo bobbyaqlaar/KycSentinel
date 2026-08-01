@@ -7,9 +7,36 @@ Four model routes, chosen so multi-LLM is structural, not cosmetic:
 | Agent | Route | Why |
 |---|---|---|
 | Intake | `falcon3:3b` @ Ollama | Sovereign/in-border: raw PII text is parsed locally; the scrub runs before ANY cloud call. `degrade_to: null` — a PII route must never fail over to a cloud model. |
-| Research | `llama-3.3-70b` @ Groq | High-volume retrieval + tool loops on the cheap tier, **plus its own one-line screening-summary LLM call** so the route is genuinely exercised, not only a degrade target (E2). |
-| Analyst | `claude-sonnet-4-6` (frontier) | The one expensive judgment call; streamed (`complete_stream`, TTFT budget); degrade ladder → research → intake (F5). |
-| Judge | `claude-opus-4-8` (frontier, **distinct from Analyst**) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). **No `degrade_to` — the only role without one.** See "Why the judge does not degrade" below. |
+| Research | `meta-llama/llama-3.3-70b-instruct` @ OpenRouter | High-volume retrieval + tool loops on the cheap tier, **plus its own one-line screening-summary LLM call** so the route is genuinely exercised, not only a degrade target (E2). |
+| Analyst | `anthropic/claude-sonnet-4.5` @ OpenRouter (frontier) | The one expensive judgment call; streamed (`complete_stream`, TTFT budget); degrade ladder → research → intake (F5). |
+| Judge | `gemini-3-flash-preview` @ Google AI Studio (**cross-vendor**, distinct from Analyst) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). **No `degrade_to` — the only role without one.** See "Why the judge does not degrade" below. |
+
+## The rating floor is enforced on evidence, not on the rating
+
+`check_rating_floor` in `agents/judge.py` is deterministic and runs after
+citation grounding, independently of it.
+
+The Analyst decides the rating, but some inputs remove that discretion.
+policy-003: *"Any hit mandates a HIGH rating and human review before
+onboarding."* A sanctions hit is a **fact returned by the screening tool**, not
+an opinion, so whether it forces human review must not depend on the model
+agreeing.
+
+It previously did. HITL was gated on
+`needs_hitl = assessment.rating == "HIGH" or judge.flagged`, and against live
+models the Analyst rated an applicant with one confirmed sanctions hit as
+MEDIUM, citing five policies — all genuinely retrieved, so grounding passed and
+`judge.flagged` was False. Both clauses evaluated False: a sanctions-matched
+applicant one step from auto-approval with no human review.
+
+Nothing offline could catch it. The fake gateway derives the rating from the
+hit count, so it always returns HIGH and the control looks sound; it fails only
+when a real model is asked to agree with a rule it was never obliged to follow.
+Grounding does not help either — it proves the citations point at real
+documents, not that the rating obeys them.
+
+Floors enforced: any sanctions hit → HIGH (policy-003); two or more adverse
+media items → at least MEDIUM (policy-004).
 
 ## Why the judge does not degrade
 
@@ -39,7 +66,7 @@ failed the entire application. A call whose *answer* nobody reads could block
 onboarding. The degrade hid this by substituting a weaker model to write a
 critique nobody reads. That call is now fail-open, which is the real fix.
 
-**It named an actor route.** `research` is the Groq model the pipeline itself
+**It named an actor route.** `research` is the retrieval model the pipeline itself
 uses, so the declared fallback pointed the grader at the side of the separation
 it exists to be independent of.
 
