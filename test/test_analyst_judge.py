@@ -177,3 +177,70 @@ async def test_a_flagged_citation_still_blocks_when_the_judge_is_down(gateway):
 
     verdict = await run_judge(gateway, assessment, findings)
     assert verdict.flagged
+
+
+# ── Evidence-mandated rating floor (policy-003 / policy-004) ─────────────────
+
+
+def test_sanctions_hit_forces_review_even_when_the_model_under_rates():
+    """The control that failed live.
+
+    Against real models the Analyst rated an applicant with one confirmed
+    sanctions hit as MEDIUM, citing five genuinely-retrieved policies — so
+    citation grounding passed, `judge.flagged` was False, and
+    `needs_hitl = rating == "HIGH" or judge.flagged` came out FALSE. A
+    sanctions-matched applicant was one step from auto-approval.
+
+    policy-003 makes this non-discretionary: "Any hit mandates a HIGH rating
+    and human review". A sanctions hit is a fact from the screening tool, so
+    the gate must key off the evidence rather than the model's agreement.
+    """
+    from agents.judge import check_rating_floor
+
+    findings = ResearchFindings(
+        sanctions_hits=[{"entity": "Viktor Marchenko"}],
+        retrieved_doc_ids=["policy-003", "policy-005"],
+    )
+    under_rated = RiskAssessment(
+        rating="MEDIUM", rationale="Some risk.", citations=["policy-003", "policy-005"]
+    )
+    v = check_rating_floor(under_rated, findings)
+    assert v.flagged
+    assert "policy-003" in v.reason
+    # The whole point: HITL fires on the evidence, not on the rating.
+    assert (under_rated.rating == "HIGH" or v.flagged) is True
+
+
+def test_a_correctly_rated_sanctions_hit_is_not_double_flagged():
+    from agents.judge import check_rating_floor
+
+    findings = ResearchFindings(
+        sanctions_hits=[{"entity": "x"}], retrieved_doc_ids=["policy-003"]
+    )
+    ok = RiskAssessment(rating="HIGH", rationale="Sanctions hit.", citations=["policy-003"])
+    assert not check_rating_floor(ok, findings).flagged
+
+
+def test_adverse_media_floor():
+    """policy-004: two or more items warrant at least MEDIUM."""
+    from agents.judge import check_rating_floor
+
+    findings = ResearchFindings(
+        adverse_media=["a", "b"], retrieved_doc_ids=["policy-004"]
+    )
+    assert check_rating_floor(
+        RiskAssessment(rating="LOW", rationale="", citations=[]), findings
+    ).flagged
+    assert not check_rating_floor(
+        RiskAssessment(rating="MEDIUM", rationale="", citations=[]), findings
+    ).flagged
+
+
+def test_clean_applicant_is_not_flagged():
+    """No evidence, no floor — a genuine LOW must stay LOW and auto-approvable."""
+    from agents.judge import check_rating_floor
+
+    assert not check_rating_floor(
+        RiskAssessment(rating="LOW", rationale="Clean.", citations=["policy-005"]),
+        ResearchFindings(retrieved_doc_ids=["policy-005"]),
+    ).flagged

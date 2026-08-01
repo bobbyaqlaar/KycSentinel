@@ -768,3 +768,44 @@ fixes from this session at once:
 
 Final result: a real LOW rating with a model-authored rationale, from live
 models, with every resilience control behaving as designed.
+
+## 2026-08-02 — live routes: a sanctions hit was one step from auto-approval
+
+Ran the golden applicants through the REAL pipeline for the first time
+(OpenRouter routes, `KYC_FAKE_LLM` unset). The judge could not score them —
+Gemini's free-tier window was exhausted — but the run found more than a score
+would have.
+
+**The mandatory-HITL control failed.** Applicant `sanc-006` has one confirmed
+sanctions hit. policy-003: "Any hit mandates a HIGH rating and human review
+before onboarding." The live Analyst rated it **MEDIUM**, cited five policies —
+all genuinely retrieved, so citation grounding **passed** — and therefore:
+
+    needs_hitl = assessment.rating == "HIGH" or judge.flagged
+               = False                        or False        = False
+
+A sanctions-matched applicant with no human review. The gate trusted the
+model's *opinion* of something that is a *fact* from the screening tool.
+
+Nothing offline could have caught it. The fake gateway derives the rating
+deterministically from the hit count, so it always returns HIGH and the control
+looks sound; it only fails when a real model is asked to agree with a rule it
+was never obliged to follow. Every unit test, demo scenario and eval gate was
+green throughout.
+
+Fixed with `check_rating_floor` in `agents/judge.py` — a deterministic check
+run after grounding and independent of it, because a well-cited rationale can
+still under-rate. Sanctions hits force HIGH; two or more adverse media items
+force at least MEDIUM. Verified on the same live route: the Analyst still says
+MEDIUM, and `needs_hitl` is now True with the reason recorded.
+
+**Two other live-only failures**, both root-caused to one framework bug: a
+provider returned `"content": null`, `parse_response` passed the None along,
+and the PII scrubber died on it — surfacing once as `invalid JSON` and once as
+`TypeError` deep inside a guardrail. Fixed framework-side.
+
+Also observed, not yet addressed: the live models cite loosely — `policy-008`
+(citation grounding, a meta-policy) and `policy-007` (fairness) appear as
+rating *bases*. Grounded, so nothing flags them, but they are category errors
+in the rationale. The fake gateway's citations are now semantically correct,
+so this gap is real-model behaviour rather than fixture drift.
