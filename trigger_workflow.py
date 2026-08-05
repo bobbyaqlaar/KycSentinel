@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # entrypoint to inherit the bootstrap from, so it needs its own.
 from agents import _framework  # noqa: E402,F401
 
-from temporalio.client import Client  # noqa: E402
+from runtime.temporal_client import connect as connect_temporal  # noqa: E402
 
 from workflows.kyc_workflow import KycApplicationWorkflow, KycWorkflowInput  # noqa: E402
 
@@ -31,7 +31,7 @@ from workflows.kyc_workflow import KycApplicationWorkflow, KycWorkflowInput  # n
 async def main(applicant_id: str) -> None:
     fixtures = json.loads((Path(__file__).parent / "fixtures" / "applicants.json").read_text())
     submission = next(a["submission"] for a in fixtures if a["id"] == applicant_id)
-    client = await Client.connect(os.environ.get("TEMPORAL_ADDRESS", "localhost:7233"))
+    client = await connect_temporal()   # address + TEMPORAL_TLS + timeout, one place
     handle = await client.start_workflow(
         KycApplicationWorkflow.run,
         KycWorkflowInput(tenant_id="kyc-sentinel", submission=submission),

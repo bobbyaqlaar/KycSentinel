@@ -830,3 +830,20 @@ registry the graded repo can edit is one where that repo could downgrade
 Harness now reports **18 controls passing** for this tenant, up from 17. The
 run also prints its verdict — it previously exited with a bare status code, so
 a red CI step said nothing about which control failed.
+
+## 2026-08-06 — Temporal connection moved to the shared connector
+
+A framework-wide review for functional (not name-based) duplication found seven
+Temporal connect sites disagreeing three ways. Two were this repo's.
+
+`worker.py` and `trigger_workflow.py` each called `Client.connect` directly and
+**neither read `TEMPORAL_TLS`** — only the framework's example scripts did. A
+deployment against a TLS-terminating Temporal Cloud endpoint would have
+connected without TLS, with nothing reporting it. (The examples were not much
+better: they compared against `"true"` while OPERATIONS.md documents `"1"`, so
+the documented value silently disabled TLS there too.)
+
+Both now use `runtime.temporal_client.connect()`, which owns the address
+default, TLS parsing and a bounded connect timeout. Nothing about this repo's
+behaviour changes today — it runs against a local Temporal without TLS — but a
+TLS deployment would previously have failed open, and silently.

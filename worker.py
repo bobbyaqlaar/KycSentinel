@@ -21,7 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # runtime wasn't a package (framework G6).
 from agents import _framework  # noqa: E402,F401
 
-from temporalio.client import Client  # noqa: E402
+from runtime.temporal_client import connect as connect_temporal  # noqa: E402
 from temporalio.worker import Worker  # noqa: E402
 
 from runtime.workflows.base_workflow import (  # noqa: E402
@@ -40,7 +40,7 @@ from workflows.kyc_workflow import KycApplicationWorkflow  # noqa: E402
 async def main() -> None:
     address = os.environ.get("TEMPORAL_ADDRESS", "localhost:7233")
     task_queue = os.environ.get("TASK_QUEUE", "kyc-sentinel")
-    client = await Client.connect(address)
+    client = await connect_temporal()   # address + TEMPORAL_TLS + timeout, one place
     worker = Worker(
         client,
         task_queue=task_queue,
