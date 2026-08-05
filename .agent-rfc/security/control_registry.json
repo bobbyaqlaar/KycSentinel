@@ -1,0 +1,18 @@
+[
+  {
+    "id": "SEC-KYC-FLOOR-001",
+    "title": "Evidence-mandated rating floor forces human review",
+    "status": "met",
+    "owner": "tenant",
+    "frameworks": {
+      "owasp": ["LLM09"],
+      "nist": ["MEASURE 2.6", "MANAGE 2.2"],
+      "atlas": ["AML.T0051"],
+      "iso42001": [6, 8]
+    },
+    "runner": "tenant_suite",
+    "suite": "test/test_analyst_judge.py",
+    "check_type": "unit",
+    "mechanism": "agents/judge.py:check_rating_floor — policy-003/004 floors derived from screening tool output, checked after citation grounding and independently of it"
+  }
+]

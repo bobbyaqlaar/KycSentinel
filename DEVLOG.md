@@ -809,3 +809,24 @@ Also observed, not yet addressed: the live models cite loosely — `policy-008`
 rating *bases*. Grounded, so nothing flags them, but they are category errors
 in the rationale. The fake gateway's citations are now semantically correct,
 so this gap is real-model behaviour rather than fixture drift.
+
+## 2026-08-06 — the rating floor is now a declared control
+
+`check_rating_floor` had tests, documentation in RFC-002 and a demonstrated
+failure behind it — a live run put a sanctions-matched applicant one step from
+auto-approval — and the compliance harness could not see it. There was nowhere
+for a tenant to declare a control of its own.
+
+The framework now merges `.agent-rfc/security/control_registry.json` over its
+own, mirroring the `models.yaml` framework←tenant merge. This repo declares
+**SEC-KYC-FLOOR-001**, evidenced by `test/test_analyst_judge.py` — the suite
+that already asserts a sanctions hit forces review even when the model
+under-rates, and that a clean applicant is not flagged.
+
+The merge is **additive only**: redefining a framework control id raises. A
+registry the graded repo can edit is one where that repo could downgrade
+`SEC-HITL-001` to `noop` and keep a green harness.
+
+Harness now reports **18 controls passing** for this tenant, up from 17. The
+run also prints its verdict — it previously exited with a bare status code, so
+a red CI step said nothing about which control failed.
