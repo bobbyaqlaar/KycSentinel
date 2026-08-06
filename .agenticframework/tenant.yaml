@@ -6,7 +6,7 @@ tenant:
   owner: bobbyaqlaar@gmail.com
 
 framework:
-  version: "1.1.x"
+  version: "1.2.x"
 
 gateway:
   # Per-agent model routes live in models.yaml's `profiles:` block, not here.

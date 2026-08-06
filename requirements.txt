@@ -15,7 +15,7 @@
 # .github/workflows/ci.yml), so PRs test against the framework's HEAD; this
 # line is what a standalone `docker build` / Cloud Run `--source` deploy
 # resolves, since those only have this repo's own tree to work with.
-agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@v1.1.0
+agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@v1.2.0
 
 # Direct deps of this app's own code (the runtime brings its own).
 pydantic>=2.0,<3.0

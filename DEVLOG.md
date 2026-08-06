@@ -847,3 +847,25 @@ Both now use `runtime.temporal_client.connect()`, which owns the address
 default, TLS parsing and a bounded connect timeout. Nothing about this repo's
 behaviour changes today — it runs against a local Temporal without TLS — but a
 TLS deployment would previously have failed open, and silently.
+
+## 2026-08-06 — pinned to framework v1.2.0
+
+The pin said `v1.1.0` and had become materially wrong, not merely stale: this
+repo now imports `runtime.temporal_client` (added in 1.2.0), its `models.yaml`
+uses the catalog+profiles shape, and its `.agent-rfc/security/control_registry.json`
+needs the tenant-registry merge. None of that exists in 1.1.0, so anyone
+installing from the pin would have got a tenant that could not start.
+
+CI did not catch it because it installs the framework from the checkout
+(`pip install -e $AGENTSMITH_DIR`) rather than the pin — which is the right
+call for a testbed developed alongside the framework, but it means the pin is
+documentation that nothing executes. Worth re-reading whenever the framework
+releases.
+
+`framework.version` in tenant.yaml moved to `1.2.x` to match.
+
+Three v1.2.0 behaviour changes apply here, all already absorbed during the work
+that produced them: the judge role wins over `AGENT_JUDGE_MODEL`; a tenant
+`models.yaml` entry with a different `id` replaces rather than merges (this is
+what stopped the Anthropic judge inheriting an Ollama endpoint); and `--strict`
+fails a control claiming `met` with no runner.
