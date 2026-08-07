@@ -12,6 +12,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual re-run. The v1.2.0 pin commit landed on main and GitHub never
+  # dispatched a run for it; with no workflow_dispatch the only recovery
+  # was an empty commit. cd-staging.yml already had this.
+  workflow_dispatch: {}
 
 jobs:
   test:
