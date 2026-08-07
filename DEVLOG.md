@@ -856,11 +856,22 @@ uses the catalog+profiles shape, and its `.agent-rfc/security/control_registry.j
 needs the tenant-registry merge. None of that exists in 1.1.0, so anyone
 installing from the pin would have got a tenant that could not start.
 
-CI did not catch it because it installs the framework from the checkout
-(`pip install -e $AGENTSMITH_DIR`) rather than the pin — which is the right
-call for a testbed developed alongside the framework, but it means the pin is
-documentation that nothing executes. Worth re-reading whenever the framework
-releases.
+Two different blind spots kept it green, and it is worth being exact about
+which, because the obvious explanation is only half right:
+
+  * CI installs the framework from the checkout (`pip install -e
+    $AGENTSMITH_DIR`) rather than the pin, so CI never read it at all. That is
+    the right call for a testbed developed alongside the framework.
+  * CD *does* read it — the Dockerfile runs `pip install -r requirements.txt`,
+    so the staging smoke job genuinely installed v1.1.0. It passed anyway
+    because the Cloud Run Job runs `demo.py all`, and that import graph (nine
+    modules) never reaches `runtime.temporal_client`. The missing module was
+    installed-but-unimported.
+
+So the pin is executed, not decorative — but the only entry point that would
+have failed on it, `worker.py`, is exactly the one the smoke job does not run
+(see "Deployment — pending"). Re-read the pin on every framework release; no
+current job will fail on a wrong one.
 
 `framework.version` in tenant.yaml moved to `1.2.x` to match.
 
