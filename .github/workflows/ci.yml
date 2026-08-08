@@ -117,7 +117,14 @@ jobs:
           ANTHROPIC_API_KEY_JUDGE:  ${{ secrets.ANTHROPIC_API_KEY_JUDGE }}
           GROQ_API_KEY:             ${{ secrets.GROQ_API_KEY }}
           OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:           ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY:       ${{ secrets.OPENROUTER_API_KEY }}
           AGENT_OWNER_ID:           ci@kyc-sentinel
+          # Free-tier judges cap requests per minute. Unpaced, the suite bursts
+          # past the cap, cost_router's 4-attempt retry is exhausted, every case
+          # carries an error, and run-evals reports "judge was unreachable" and
+          # exits 0 — the gate does not fail, it never grades.
+          EVAL_RPM:                 "10"
         run: >-
           python3 $AGENTSMITH_DIR/scripts/run-evals.py
           --skip-without-judge-credentials
@@ -129,7 +136,14 @@ jobs:
           ANTHROPIC_API_KEY_JUDGE:  ${{ secrets.ANTHROPIC_API_KEY_JUDGE }}
           GROQ_API_KEY:             ${{ secrets.GROQ_API_KEY }}
           OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:           ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY:       ${{ secrets.OPENROUTER_API_KEY }}
           AGENT_OWNER_ID:           ci@kyc-sentinel
+          # Free-tier judges cap requests per minute. Unpaced, the suite bursts
+          # past the cap, cost_router's 4-attempt retry is exhausted, every case
+          # carries an error, and run-evals reports "judge was unreachable" and
+          # exits 0 — the gate does not fail, it never grades.
+          EVAL_RPM:                 "10"
         run: >-
           python3 $AGENTSMITH_DIR/scripts/run-evals.py
           --suite fairness --skip-without-judge-credentials
@@ -141,7 +155,14 @@ jobs:
           ANTHROPIC_API_KEY_JUDGE:  ${{ secrets.ANTHROPIC_API_KEY_JUDGE }}
           GROQ_API_KEY:             ${{ secrets.GROQ_API_KEY }}
           OPENAI_API_KEY:           ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY:           ${{ secrets.GEMINI_API_KEY }}
+          OPENROUTER_API_KEY:       ${{ secrets.OPENROUTER_API_KEY }}
           AGENT_OWNER_ID:           ci@kyc-sentinel
+          # Free-tier judges cap requests per minute. Unpaced, the suite bursts
+          # past the cap, cost_router's 4-attempt retry is exhausted, every case
+          # carries an error, and run-evals reports "judge was unreachable" and
+          # exits 0 — the gate does not fail, it never grades.
+          EVAL_RPM:                 "10"
         run: >-
           python3 $AGENTSMITH_DIR/scripts/run-evals.py
           --suite hallucination --skip-without-judge-credentials

@@ -880,3 +880,39 @@ that produced them: the judge role wins over `AGENT_JUDGE_MODEL`; a tenant
 `models.yaml` entry with a different `id` replaces rather than merges (this is
 what stopped the Anthropic judge inheriting an Ollama endpoint); and `--strict`
 fails a control claiming `met` with no runner.
+
+## 2026-08-08 — the judged eval gates were never running in CI
+
+The golden/fairness/hallucination gates have been skipping in CI since the judge
+was repointed at Gemini, and the reason was not quota.
+
+`--skip-without-judge-credentials` asks the merged registry which env var the
+`judge` role needs and skips when it is absent. That design is right, and the
+comment above these steps already explains why the alternative (`if:
+secrets.X != ''`) was wrong twice. What it depends on is the *pass-through list*
+below it — YAML cannot look up a secret by a name computed at runtime, so every
+plausible provider key has to be named explicitly. When the judge moved to
+`gemini-3-flash-preview` (`api_key_env: GEMINI_API_KEY`), that list was not
+updated. It still passed ANTHROPIC/GROQ/OPENAI. So the flag correctly detected a
+missing credential and skipped, every run, and the suite reported success.
+
+`GEMINI_API_KEY` and `OPENROUTER_API_KEY` are now passed through. **The
+repository secret still has to be created** — `gh secret list` shows only
+`ANTHROPIC_API_KEY_JUDGE` — so the gates keep skipping until it is:
+
+    gh secret set GEMINI_API_KEY --repo bobbyaqlaar/KycSentinel
+
+`EVAL_RPM=10` is set on the same three steps. Free-tier judges cap requests per
+minute; unpaced, 12 cases burst past the cap, cost_router's 4-attempt retry is
+exhausted, every case carries an error, and run-evals reports "judge was
+unreachable" and exits 0. That is deliberate — no verdict is an infrastructure
+failure, not a quality regression — but it means an unpaced free-tier run does
+not fail, it never grades.
+
+**The golden suite has now been run against the live route**, locally, with
+pacing: 12/12 cases graded by `gemini-3-flash-preview`, zero errors, overall
+**0.992** against the calibrated 0.90 threshold. One case (kyc_004) scored 0.90
+— the judge caught the response inventing a "Company registry record" and an
+"Auto-approved" status that were not in the evidence. That is the hallucination
+the gate exists to catch, and it is worth keeping as a live case rather than
+tuning away.
