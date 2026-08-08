@@ -916,3 +916,50 @@ pacing: 12/12 cases graded by `gemini-3-flash-preview`, zero errors, overall
 "Auto-approved" status that were not in the evidence. That is the hallucination
 the gate exists to catch, and it is worth keeping as a live case rather than
 tuning away.
+
+## 2026-08-08 — kyc_004: the ungrounded claims were in the renderer, not the model
+
+The judge scored kyc_004 0.60 in CI (0.90 locally) and called out three items as
+"hallucinated information not present in the input or reference": *Company
+registry record active*, *Auto-approved*, and a PII-scrub claim whose reference
+grounds it in `[policy-001]`.
+
+None of those came from a model. The pipeline's own rationale was already cited
+correctly — `[policy-005]` for the rubric and `[policy-002]` for source-of-funds,
+which policy-002 explicitly *mandates* citing. The ungrounded sentences were
+appended by `scripts/pin_eval_outputs.py::_render`, the renderer that turns a
+`Decision` into the text the judge reads. They were real fields —
+`findings.registry_record["status"]`, `scrub_counts`, `outcome` — emitted as bare
+assertions with no attribution.
+
+So the judge was applying this app's own policy-008 correctly: *every claim in a
+risk rationale must cite a retrieved policy or evidence document by id*, and
+citations outside the retrieved set count as ungrounded. Three claims, no
+citations. The right fix is to ground them, not to soften the reference.
+
+- PII scrub → `[policy-001]`, matching what the reference already cites.
+- Outcome → `[policy-006]`, which is the policy that actually governs whether a
+  decision may auto-approve ("HIGH ratings and any judge-flagged rationale pause
+  for human approval"). Now states the reason, not just the verdict.
+- Registry → attributed to the tool: "Company registry lookup reports the record
+  active". Deliberately NOT given a policy id — it is a
+  `company_registry_lookup` result, not a retrieved corpus document, so citing
+  it as `[policy-nnn]` would be exactly the ungrounded citation policy-008 warns
+  about. Worth knowing that the lookup is a synthetic stub returning "active"
+  for any plausible name, which a bare assertion concealed.
+
+An audit across the golden set found the same defect in 11 of 12 cases; they
+scored 1.00 only because their references did not foreground those claims.
+kyc_011 is untouched: it is the prompt-guard block path, rendered elsewhere, its
+reference cites no policy, and it already scores 1.00.
+
+**Verification status — the fix is NOT judge-confirmed.** Deterministic checks
+all pass (75 tests, all eight demo controls, security harness exit 0) and
+re-pinning is idempotent, so the output is stable. But the Gemini free tier is
+`generate_content_free_tier_requests, limit: 20`, and a re-grade attempt got 10
+of 12 cases erroring on HTTP 429 — kyc_004 among them. The two that did grade
+scored 1.00. Re-run once the daily allowance resets, or move to a paid tier.
+
+Note that `EVAL_RPM` does not help here: pacing is a per-minute instrument and
+demonstrably worked (12 cases over ~4 minutes, ~3/min, far under any per-minute
+ceiling). The binding limit is a daily cap.
