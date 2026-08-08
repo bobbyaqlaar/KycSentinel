@@ -71,9 +71,31 @@ drivers, the framework security harness `--strict` (with
 `MODERATION_HOOK=required`), and the **adversarial** eval suite — all without
 credentials.
 
-The **scorecard / fairness / hallucination** gates need a judge model. They
-skip with a message naming the variable they want rather than failing, so CI
-stays green until you opt in. The variable comes from the `judge` role in
-`models.yaml` (currently `ANTHROPIC_API_KEY_JUDGE`, its own account for
-judge/actor separation) — set that secret and the three gates turn on with no
-workflow change.
+The **golden / fairness / hallucination** gates need a judge model. The variable
+comes from the `judge` role in `models.yaml` — currently `GEMINI_API_KEY`
+(`gemini-3-flash-preview`, a different vendor from the analyst, so judge/actor
+separation is real rather than nominal). Without it each gate skips with a
+message naming the variable it wants rather than failing, so a fork with no
+secrets stays green.
+
+With the secret set, the three gates run on **different triggers**, because they
+do not all fit in one day's judge quota — 22 calls against a free tier that
+allows 20 a day:
+
+| Trigger | Suite | Judge calls |
+|---|---|---|
+| push / PR | golden | 12 |
+| cron Mon/Wed/Fri 08:30 UTC | fairness | 4 |
+| cron Tue/Thu 08:30 UTC | hallucination | 6 |
+| `workflow_dispatch` (`judged_suites` input) | one chosen suite | 4–12 |
+
+No gate is removed or loosened — each runs less often. Fairness and
+hallucination alternate days so the heaviest day (a push plus the hallucination
+cron) is 18, inside the cap. **The free tier affords one graded push per day**;
+a second errors on quota. A paid tier removes that with no other change, since
+the route and its calibrated threshold travel with the `judge` role in
+`models.yaml`.
+
+Thresholds are **not** passed on the command line. They live on the `judge` role
+and were measured against the grader that produced them, so repointing the judge
+cannot leave a stale number behind.
