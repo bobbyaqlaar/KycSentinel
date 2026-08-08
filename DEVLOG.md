@@ -963,3 +963,40 @@ scored 1.00. Re-run once the daily allowance resets, or move to a paid tier.
 Note that `EVAL_RPM` does not help here: pacing is a per-minute instrument and
 demonstrably worked (12 cases over ~4 minutes, ~3/min, far under any per-minute
 ceiling). The binding limit is a daily cap.
+
+## 2026-08-08 — the judged suites do not fit one day's quota; split across triggers
+
+Three judged suites need **22** judge calls (golden 12, fairness 4,
+hallucination 6). Gemini's free tier allows **20 requests/day**. So a run that
+attempted all three was arithmetically unable to finish: it exhausted the
+allowance partway through the last suite and went red on an infrastructure
+error rather than a quality result. That is independent of the kyc_004 fix —
+it would have failed on a perfect codebase.
+
+Split, with no gate removed or loosened; each simply runs less often:
+
+| Trigger | Suite | Calls |
+|---|---|---|
+| push / PR | golden | 12 |
+| cron Mon/Wed/Fri 08:30 UTC | fairness | 4 |
+| cron Tue/Thu 08:30 UTC | hallucination | 6 |
+| `workflow_dispatch` | one chosen suite | 4–12 |
+
+Fairness and hallucination alternate days so the heaviest day — a push plus the
+hallucination cron — is 18, inside the cap. 08:30 UTC is after the free tier's
+midnight-Pacific reset (07:00 UTC in PDT), so a scheduled run draws on a fresh
+allowance rather than the previous day's remainder.
+
+`workflow_dispatch` takes a `judged_suites` input and runs exactly one suite.
+Without that, a manual run fired all three and re-created the 22-call run this
+split exists to prevent — which is how the problem was found in the first place.
+
+Two things follow that are worth stating plainly rather than discovering later:
+
+- **The free tier affords one graded push per day.** At 12 calls, a second push
+  the same day errors on quota. That is a property of the cap, not of the gates.
+  A paid tier removes it and nothing else would need to change — the judge route
+  and the calibrated 0.90 threshold already travel with the `judge` role.
+- **`EVAL_RPM` does not help.** Pacing is per-minute and demonstrably worked (12
+  cases over ~4 minutes, ~3/min). The binding constraint is a daily cap. Pacing
+  is still correct for per-minute limits, which is what it was added for.

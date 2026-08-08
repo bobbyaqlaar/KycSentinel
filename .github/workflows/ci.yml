@@ -15,7 +15,36 @@ on:
   # Manual re-run. The v1.2.0 pin commit landed on main and GitHub never
   # dispatched a run for it; with no workflow_dispatch the only recovery
   # was an empty commit. cd-staging.yml already had this.
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      judged_suites:
+        description: "Judged suite to run (free tier affords ~20 judge calls/day)"
+        type: choice
+        default: golden
+        options: [golden, fairness, hallucination, none]
+  # The judged suites are split across triggers because they do not all fit in
+  # one day's judge quota. Gemini's free tier allows 20 requests/day and the
+  # three suites need 22 (golden 12, fairness 4, hallucination 6) — so a run
+  # that tried all three exhausted the allowance partway through the last one
+  # and went red on an infrastructure error, not a quality result.
+  #
+  # No gate is removed or loosened; each just runs less often. Golden gates
+  # every push. Fairness and hallucination alternate days so that the heaviest
+  # day (a push plus hallucination) is 18 calls, still inside the cap:
+  #
+  #     Mon/Wed/Fri  fairness       4  + one push's golden 12 = 16
+  #     Tue/Thu      hallucination  6  + one push's golden 12 = 18
+  #
+  # 08:30 UTC is just after the free tier's midnight-Pacific reset, so the
+  # scheduled run draws from a fresh allowance rather than the previous day's
+  # remainder. Which suite runs is keyed off `github.event.schedule` below.
+  #
+  # Residual limit worth knowing: at 12 calls per golden run, the free tier
+  # affords ONE graded push per day. A second push the same day will error on
+  # quota. That is a property of the cap, not of these gates.
+  schedule:
+    - cron: "30 8 * * 1,3,5"   # fairness
+    - cron: "30 8 * * 2,4"     # hallucination
 
 jobs:
   test:
@@ -111,6 +140,14 @@ jobs:
       # Passing --fail-below here would override it — that is why these steps
       # no longer do. Provenance and the measured numbers: models.yaml.
       - name: "Eval: golden scorecard"
+        # Not on the scheduled runs: those exist to carry the other two suites,
+        # and adding golden's 12 calls would put the day back over the cap. On a
+        # manual run it is opt-in for the same reason — a dispatch that fired all
+        # three would be the 22-call run this split exists to prevent.
+        if: >-
+          github.event_name != 'schedule' &&
+          (github.event_name != 'workflow_dispatch' ||
+           github.event.inputs.judged_suites == 'golden')
         working-directory: KYC_Sentinel
         env:
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
@@ -130,6 +167,12 @@ jobs:
           --skip-without-judge-credentials
 
       - name: "Eval: fairness pair parity (policy-007)"
+        # Mon/Wed/Fri, or on demand. `github.event.schedule` is the cron that
+        # fired, which is what lets one workflow carry two different schedules
+        # without a second file duplicating the whole checkout and install.
+        if: >-
+          github.event.schedule == '30 8 * * 1,3,5' ||
+          github.event.inputs.judged_suites == 'fairness'
         working-directory: KYC_Sentinel
         env:
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
@@ -149,6 +192,10 @@ jobs:
           --suite fairness --skip-without-judge-credentials
 
       - name: "Eval: hallucination (F7 citation grounding)"
+        # Tue/Thu, or on demand.
+        if: >-
+          github.event.schedule == '30 8 * * 2,4' ||
+          github.event.inputs.judged_suites == 'hallucination'
         working-directory: KYC_Sentinel
         env:
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
