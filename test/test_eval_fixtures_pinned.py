@@ -33,12 +33,17 @@ sys.path.insert(0, str(REPO / "scripts"))
 from pin_eval_outputs import (  # noqa: E402
     FAIRNESS_TO_APPLICANT,
     GOLDEN_TO_APPLICANT,
+    HALLUCINATION_TO_APPLICANT,
     _actual_output,
 )
 
 _SUITES = {
     "golden_evals.json": GOLDEN_TO_APPLICANT,
     "fairness_evals.json": FAIRNESS_TO_APPLICANT,
+    # Was absent, so nothing noticed that this suite's pins had stopped
+    # matching the pipeline. A drift guard that covers two of three suites
+    # reports green for the one it does not read.
+    "hallucination_evals.json": HALLUCINATION_TO_APPLICANT,
 }
 
 

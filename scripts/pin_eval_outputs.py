@@ -74,6 +74,23 @@ FAIRNESS_TO_APPLICANT = {
     "kyc_fair_002_b": "fair-013b",
 }
 
+# The hallucination suite was pinned once by hand and then never regenerated:
+# its cases carried `actual_output_source: "pipeline, …"` — pipeline-derived, but
+# outside this script's loop, so `make pin-evals` never touched them. The suite
+# therefore judged text the pipeline had stopped producing, which is precisely
+# the silent drift pinning exists to prevent. It cost a real one: when the
+# policy-004 citation floor was fixed, kyc_halluc_single_media_item would have
+# kept its stale `[policy-004]` output and kept scoring 0.30 against a defect
+# that no longer existed.
+HALLUCINATION_TO_APPLICANT = {
+    "kyc_halluc_clean_low": "clean-001",
+    "kyc_halluc_clean_low_second": "clean-003",
+    "kyc_halluc_missing_source_of_funds": "pii-004",
+    "kyc_halluc_sanctions_alias_hit": "sanc-006",
+    "kyc_halluc_adverse_media_count": "media-008",
+    "kyc_halluc_single_media_item": "fair-013a",
+}
+
 APPLICANTS = {
     a["id"]: a for a in json.loads((REPO / "fixtures" / "applicants.json").read_text())
 }
@@ -185,6 +202,7 @@ def main() -> int:
     for name, mapping in (
         ("golden_evals.json", GOLDEN_TO_APPLICANT),
         ("fairness_evals.json", FAIRNESS_TO_APPLICANT),
+        ("hallucination_evals.json", HALLUCINATION_TO_APPLICANT),
     ):
         path = REPO / ".agent-rfc" / "fixtures" / name
         print(f"\n▶ {name}")

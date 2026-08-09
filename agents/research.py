@@ -82,8 +82,19 @@ async def run_research(gateway, profile: ApplicantProfile, k: int = 4) -> Resear
     governing = ["policy-005"]  # the rubric underpins every rating
     if sanctions:
         governing.append("policy-003")  # sanctions screening SOP (incl. aliases)
-    if media:
-        governing.append("policy-004")  # adverse media
+    # >= 2, not truthiness: policy-004 reads "TWO OR MORE credible adverse media
+    # items within five years warrant at least a MEDIUM rating". Citing it on a
+    # single item claims a policy whose own threshold is unmet — an ungrounded
+    # citation under policy-008, and the judge scored exactly that 0.30 on
+    # kyc_halluc_single_media_item. agents/judge.py already had the threshold
+    # right (`media >= 2`); the citation selectors did not, so one module
+    # enforced the floor while two cited it below the floor.
+    #
+    # The RATING is unaffected: policy-005's rubric says "MEDIUM: adverse media
+    # or incomplete source of funds" with no count, so a single item still
+    # warrants MEDIUM on policy-005 alone. Only the basis changes.
+    if len(media) >= 2:
+        governing.append("policy-004")  # adverse media (policy-004 floor: >= 2)
     if (profile.source_of_funds or "").strip().lower() in ("", "missing", "unknown"):
         governing.append("policy-002")  # source of funds
     ids = list(dict.fromkeys([h.id for h in hits] + governing))

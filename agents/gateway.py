@@ -133,7 +133,11 @@ class FakeGateway(_FrameworkFake):
         cited = ["policy-005"]  # the rubric is the basis for every rating
         if hits:
             cited.insert(0, "policy-003")  # sanctions hit — the governing SOP
-        if media:
+        # >= 2, matching policy-004's own threshold and agents/judge.py. The
+        # rating above deliberately still uses `media or no_sof`: policy-005
+        # grants MEDIUM for any adverse media, policy-004 only speaks from two
+        # items up. Rating and citation answer to different policies.
+        if media >= 2:
             cited.append("policy-004")
         if no_sof:
             cited.append("policy-002")

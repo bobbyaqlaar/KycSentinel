@@ -1000,3 +1000,58 @@ Two things follow that are worth stating plainly rather than discovering later:
 - **`EVAL_RPM` does not help.** Pacing is per-minute and demonstrably worked (12
   cases over ~4 minutes, ~3/min). The binding constraint is a daily cap. Pacing
   is still correct for per-minute limits, which is what it was added for.
+
+## 2026-08-09 — policy-004 was cited below its own threshold; and the pin guard had a blind third suite
+
+The hallucination suite graded for the first time (6/6, rate 0.000, 0.883 ≥ 0.80
+— PASS) and one case came back at **0.30**: `kyc_halluc_single_media_item`.
+
+**The defect.** policy-004 reads "**Two or more** credible adverse media items
+within five years warrant at least a MEDIUM rating". `agents/judge.py:102` had
+that right — `if media >= 2`. Both citation selectors did not:
+
+    agents/research.py:85    if media:            → cites policy-004 on ONE item
+    agents/gateway.py:136    if media:            → same
+
+So a single adverse-media item produced `Basis: [policy-005] [policy-004]`,
+claiming a policy whose own floor was unmet. Under policy-008 that is an
+ungrounded citation, which is what the judge charged for — and the fixture's
+reference says so outright: "policy-004 requires two or more within five years,
+so the count must not be rounded up to justify the rating." The *count* was
+honest (`1 adverse media item(s)`, never rounded), which is why the
+hallucination rate stayed 0.000 while the quality score fell. One module
+enforced the floor while two cited beneath it.
+
+Fixed at both sites (`len(media) >= 2` / `media >= 2`, the types differ). The
+**rating is deliberately unchanged**: policy-005's rubric grants MEDIUM for
+"adverse media or incomplete source of funds" with no count, so one item still
+warrants MEDIUM on policy-005 alone. Rating and citation answer to different
+policies, and only the citation was wrong.
+
+**The larger find.** Re-pinning changed only `fairness_evals.json` — and the
+failing case is in `hallucination_evals.json`. That suite was pinned by hand
+once and never regenerated: `scripts/pin_eval_outputs.py`'s loop covered golden
+and fairness only, while the hallucination cases carried
+`actual_output_source: "pipeline, …"` as if they were maintained. They were not.
+
+The suite had therefore been judging text the pipeline no longer produced —
+exactly the silent drift pinning exists to prevent — and it would have swallowed
+this fix whole: `kyc_halluc_single_media_item` would have kept its stale
+`[policy-004]` output and gone on scoring 0.30 against a defect that no longer
+existed.
+
+**This corrects the 2026-07-29 entry above**, which said the guard "fails if a
+case is unpinned, unmapped, or has drifted from what the pipeline produces —
+verified by planting stale text and watching it fail". True of the two suites it
+read; `test_eval_fixtures_pinned.py` imported the same two mapping tables, so
+the third was never examined. A drift guard covering two of three suites reports
+green on the one it cannot see.
+
+Both the pinner and the guard now include hallucination. Re-pinning moved all
+six of its cases, which is the measure of how far they had drifted. The guard
+parameterises over three suites now (75 → 78 tests).
+
+**Not judge-verified.** Today's allowance is spent (12 golden + 6 hallucination
+against 20). All three suites' pins changed, so the next graded run of each is
+the real check — Monday's cron reads fairness, the next push re-grades golden.
+`kyc_006` sat at 0.90 last run; if it moves, the pin change is why.
