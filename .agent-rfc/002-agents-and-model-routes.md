@@ -38,6 +38,31 @@ documents, not that the rating obeys them.
 Floors enforced: any sanctions hit → HIGH (policy-003); two or more adverse
 media items → at least MEDIUM (policy-004).
 
+### A citation can resolve and still not support the claim
+
+Grounding asks whether a cited id is in the retrieved set. That leaves a third
+failure it cannot see: a citation to a **real, retrieved** policy whose own
+threshold is not met.
+
+`agents/judge.py` had policy-004's floor right — `media >= 2`. Both citation
+selectors (`agents/research.py`, `agents/gateway.py`) used a bare truthiness
+check, so a single adverse-media item produced `Basis: [policy-005]
+[policy-004]`. Every id resolved, so grounding passed and the hallucination rate
+stayed 0.000; the count was honest too. The rationale simply rested on a policy
+that does not speak until two items. One module enforced the floor while two
+cited beneath it.
+
+Both selectors now compare against the same threshold the judge uses. The
+**rating** is deliberately untouched: policy-005's rubric grants MEDIUM for
+"adverse media or incomplete source of funds" with no count, so one item still
+warrants MEDIUM on policy-005 alone. Rating and citation answer to different
+policies, and only the citation was wrong.
+
+The general rule this leaves: when a policy carries a numeric threshold, the
+code that CITES it must test that threshold, not merely the presence of the
+evidence type. Grounding will not catch the difference, and neither will a
+hallucination rate.
+
 ## Why the judge does not degrade
 
 Every other role falls back down the ladder on a provider failure. The judge
