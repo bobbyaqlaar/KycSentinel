@@ -149,7 +149,28 @@ def _render(decision) -> str:
     return " ".join(p.rstrip(".") + "." for p in parts)
 
 
-async def _actual_output(applicant_id: str) -> str:
+def _rationale_only(decision) -> str:
+    """Just the Analyst's rationale — what the HALLUCINATION suite judges.
+
+    That suite asks whether every claim in a RATIONALE is supported by the
+    retrieved set its case declares ("Retrieved policies: policy-005,
+    policy-004"). `_render` deliberately adds more — registry status, PII scrub
+    counts, the approval outcome — each citing policies like `policy-001` and
+    `policy-006` that are correct for the decision record and are NOT in these
+    cases' retrieved sets. Pinning the full render made every claim an
+    ungrounded citation under policy-008 and drove the hallucination rate from
+    0.000 to 1.000 on a codebase that had not regressed.
+
+    So the two suites judge two different projections of the same Decision, and
+    that is deliberate rather than an oversight: golden and fairness read the
+    decision as a reviewer would, hallucination reads the rationale as a
+    grounding check.
+    """
+    return (decision.rationale or "").strip()
+
+
+async def _actual_output(applicant_id: str, render=None) -> str:
+    render = render or _render
     submission = APPLICANTS[applicant_id]["submission"]
     gateway = get_gateway()
     try:
@@ -168,10 +189,10 @@ async def _actual_output(applicant_id: str) -> str:
             f"({', '.join(decision.guard_reasons)}). Routed to human review; "
             f"no rating produced."
         )
-    return _render(decision)
+    return render(decision)
 
 
-def _pin(path: Path, mapping: dict[str, str | tuple[str, ...]]) -> int:
+def _pin(path: Path, mapping: dict[str, str | tuple[str, ...]], render=None) -> int:
     cases = json.loads(path.read_text())
     changed = 0
     for case in cases:
@@ -180,7 +201,7 @@ def _pin(path: Path, mapping: dict[str, str | tuple[str, ...]]) -> int:
             print(f"   ⚠️  no applicant mapped for {case['id']} — left unpinned")
             continue
         ids = (applicant,) if isinstance(applicant, str) else applicant
-        outputs = [asyncio.run(_actual_output(a)) for a in ids]
+        outputs = [asyncio.run(_actual_output(a, render)) for a in ids]
         produced = (
             outputs[0]
             if len(outputs) == 1
@@ -199,14 +220,16 @@ def _pin(path: Path, mapping: dict[str, str | tuple[str, ...]]) -> int:
 
 def main() -> int:
     total = 0
-    for name, mapping in (
-        ("golden_evals.json", GOLDEN_TO_APPLICANT),
-        ("fairness_evals.json", FAIRNESS_TO_APPLICANT),
-        ("hallucination_evals.json", HALLUCINATION_TO_APPLICANT),
+    for name, mapping, render in (
+        ("golden_evals.json", GOLDEN_TO_APPLICANT, None),
+        ("fairness_evals.json", FAIRNESS_TO_APPLICANT, None),
+        # Rationale only — see _rationale_only for why this suite reads a
+        # different projection than the other two.
+        ("hallucination_evals.json", HALLUCINATION_TO_APPLICANT, _rationale_only),
     ):
         path = REPO / ".agent-rfc" / "fixtures" / name
         print(f"\n▶ {name}")
-        total += _pin(path, mapping)
+        total += _pin(path, mapping, render)
     print(f"\n✅ pinned; {total} case(s) changed. Review with: git diff .agent-rfc/fixtures/")
     return 0
 

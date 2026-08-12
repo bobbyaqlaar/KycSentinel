@@ -35,15 +35,23 @@ from pin_eval_outputs import (  # noqa: E402
     GOLDEN_TO_APPLICANT,
     HALLUCINATION_TO_APPLICANT,
     _actual_output,
+    _rationale_only,
 )
 
+# suite → (applicant mapping, projection of the Decision it pins).
+#
+# The projection matters as much as the mapping. Golden and fairness pin the
+# full reviewer-facing render; hallucination pins the rationale alone, because
+# that suite asks whether every claim is grounded in the retrieved set its case
+# declares. Pinning the full render there cited policy-001 and policy-006,
+# which those cases never retrieved, and drove the hallucination rate from
+# 0.000 to 1.000 against a codebase that had not regressed. A guard that
+# assumed one projection could not have caught that — it would have agreed
+# with the wrong pins.
 _SUITES = {
-    "golden_evals.json": GOLDEN_TO_APPLICANT,
-    "fairness_evals.json": FAIRNESS_TO_APPLICANT,
-    # Was absent, so nothing noticed that this suite's pins had stopped
-    # matching the pipeline. A drift guard that covers two of three suites
-    # reports green for the one it does not read.
-    "hallucination_evals.json": HALLUCINATION_TO_APPLICANT,
+    "golden_evals.json": (GOLDEN_TO_APPLICANT, None),
+    "fairness_evals.json": (FAIRNESS_TO_APPLICANT, None),
+    "hallucination_evals.json": (HALLUCINATION_TO_APPLICANT, _rationale_only),
 }
 
 
@@ -62,7 +70,7 @@ def test_every_case_is_pinned(suite: str) -> None:
 
 @pytest.mark.parametrize("suite", sorted(_SUITES))
 def test_every_case_is_mapped_to_an_applicant(suite: str) -> None:
-    mapping = _SUITES[suite]
+    mapping, _ = _SUITES[suite]
     unmapped = [c["id"] for c in _cases(suite) if c["id"] not in mapping]
     assert not unmapped, (
         f"{suite}: {unmapped} have no applicant mapping in "
@@ -74,14 +82,14 @@ def test_every_case_is_mapped_to_an_applicant(suite: str) -> None:
 def test_pins_match_what_the_pipeline_produces_today(suite: str) -> None:
     """Fails when agent behaviour changed but the fixtures weren't re-pinned —
     the eval would otherwise keep grading against a stale baseline and pass."""
-    mapping = _SUITES[suite]
+    mapping, render = _SUITES[suite]
     stale = []
     for case in _cases(suite):
         applicant = mapping.get(case["id"])
         if applicant is None:
             continue
         ids = (applicant,) if isinstance(applicant, str) else applicant
-        outputs = [asyncio.run(_actual_output(a)) for a in ids]
+        outputs = [asyncio.run(_actual_output(a, render)) for a in ids]
         expected = (
             outputs[0]
             if len(outputs) == 1

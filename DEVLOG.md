@@ -1055,3 +1055,43 @@ parameterises over three suites now (75 → 78 tests).
 against 20). All three suites' pins changed, so the next graded run of each is
 the real check — Monday's cron reads fairness, the next push re-grades golden.
 `kyc_006` sat at 0.90 last run; if it moves, the pin change is why.
+
+## 2026-08-12 — correction: the hallucination pins were not stale, and re-pinning them broke the suite
+
+Tuesday's cron (2026-08-11) failed the hallucination gate with **rate 1.000**,
+every one of six cases flagged, zero quota errors. Genuine grading, and the
+regression was mine.
+
+**The 2026-08-09 entry above is wrong on one point.** It said the hallucination
+fixture's pins "had drifted from what the pipeline produces". They had not. They
+were pinned from `decision.rationale`; the other two suites pin `_render(decision)`
+— the fuller, reviewer-facing text. Two suites, two projections of the same
+Decision, deliberately. Seeing `actual_output_source: "pipeline, …"` on a suite
+outside the pin loop, I concluded the pins were stale and regenerated them
+through `_render`. They were not stale; they were a different projection.
+
+**Why that broke it.** The hallucination suite asks whether every claim is
+grounded in the retrieved set its own case declares — `"Retrieved policies:
+policy-005, policy-004"`. `_render` adds the registry status, the PII scrub
+counts and the approval outcome, citing `[policy-001]` and `[policy-006]`. Those
+citations are correct for a decision record and absent from these cases'
+retrieved sets, so under policy-008 every case became an ungrounded citation.
+Rate went 0.000 → 1.000 against a codebase that had not regressed.
+
+**Fix.** `_pin` now takes the projection per suite: golden and fairness keep
+`_render`, hallucination uses `_rationale_only`. Five of the six pins are now
+byte-identical to the pre-regression baseline; the sixth differs by exactly the
+intended policy-004 change (`[policy-005] [policy-004]` → `[policy-005]` on a
+single media item), which is the fix this whole thread was about.
+
+`test_eval_fixtures_pinned.py` carried the same assumption — one projection for
+all suites — so it agreed with the wrong pins and could not have caught this.
+`_SUITES` now maps each suite to *(mapping, projection)*.
+
+**What was right to keep:** hallucination stays inside the pin loop. Being
+outside it was a real gap; regenerating it with the wrong projection was a
+separate mistake. Both are fixed rather than one being reverted onto the other.
+
+**Lesson worth carrying:** `actual_output_source` recorded WHICH applicant a pin
+came from but not WHICH projection of the Decision. That missing half is what
+made a wrong inference look well-founded.
