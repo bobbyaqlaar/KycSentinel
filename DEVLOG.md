@@ -1214,3 +1214,36 @@ quota cap. It now says to treat it as temporary and prefer a judge whose quota
 fits, because the split trades correctness for latency — and because a grader
 with room to run a suite repeatedly gives you a variance measurement, which a
 constrained one never can.
+
+## 2026-08-13 — fairness tightened to 0.95; hallucination deliberately not
+
+Watched the runs and gathered the passes the earlier calibration note asked for.
+
+**fairness → 0.95.** Four clean passes (three local, one in CI), all four cases
+1.00 every time, zero movement, zero errors — flatter than golden's evidence,
+which earned 0.95 with one case moving 0.10. At 0.95 a single case dropping
+below 0.80 trips the gate, and so does one pair losing parity: parity is checked
+against this same threshold and a diverging pair takes it to 0.50. That is what
+this suite exists to catch.
+
+**hallucination stays 0.80.** Only one clean pass exists. Three local attempts
+hit Groq's rate limit and returned errors, and an errored case is not a variance
+measurement — treating those zeros as quality data would be the same confusion
+this repo keeps having to unpick. Its operative control is the flagged-claim
+CEILING (0.05), which has read 0.000 on every clean run; the score floor is
+secondary. Revisit once a few pushes have supplied clean passes.
+
+**Groq is not unlimited, and I should not have implied it was.** The
+2026-08-12 note said it "absorbed 46 calls with no quota error", which was true
+and incomplete. Across a full day — calibration, two CI runs, and these
+variance passes — the limit does appear, somewhere north of 100 calls. It is
+comfortably beyond what a full 22-call cycle needs, several times over, which is
+the property that mattered. It is not headroom to run suites in a loop.
+
+**One defect found while verifying.** The fairness verification run printed
+`Overall score: 0.000 ❌ FAIL` and had actually skipped and exited 0 — every
+case had errored on the rate limit, and the infrastructure guard did its job.
+The banner printed before that guard, so the report contradicted its own exit
+code. Fixed framework-side: the banner now reads `NO VERDICT (judge
+unreachable)`. Worth noting how it was found — a threshold change I was
+verifying looked like it had broken fairness, and it had not.

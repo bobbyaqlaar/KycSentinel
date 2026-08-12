@@ -206,10 +206,24 @@ profiles:
       # aggregate drop (one case falling 1.00 → 0.50, or two falling 0.25); at
       # 0.90 it would take more than a whole case failing outright.
       #
-      # fairness stays 0.90 — one pass is not a variance measurement, and this
-      # suite is four cases, so a single case at 0.60 already lands on 0.90.
-      # Raise it after two more clean passes, on the same reasoning as above.
-      fail_below: {golden: 0.95, fairness: 0.90}
+      # fairness 0.90 → 0.95 on 2026-08-12, after the passes the earlier note
+      # asked for: FOUR clean passes (three local, one in CI), every case 1.00
+      # every time, zero movement and zero errors — a flatter result than
+      # golden's, which earned 0.95 with one case moving 0.10. At 0.95 a single
+      # case dropping below 0.80 trips the gate, and so does one pair losing
+      # parity (parity is checked against this same threshold, and a diverging
+      # pair takes it to 0.50). That is the behaviour this suite exists to
+      # catch.
+      #
+      # hallucination is NOT tightened and stays on the default 0.80. Only one
+      # clean pass exists (the CI run); three local attempts hit Groq's rate
+      # limit and returned errors, which are not variance data — scoring an
+      # infrastructure failure as a quality result is the exact confusion this
+      # file argues against elsewhere. Its real control is the flagged-claim
+      # CEILING (HALLUCINATION_FAIL_ABOVE, 0.05), which has read 0.000 on every
+      # clean run; the score floor is secondary. Revisit once a few pushes have
+      # supplied clean passes.
+      fail_below: {golden: 0.95, fairness: 0.95}
 
   # FULLY OFFLINE. Every role on Ollama — no key, no egress, nothing billable.
   # For sovereign / air-gapped operation and for exercising the real pipeline
