@@ -1095,3 +1095,40 @@ separate mistake. Both are fixed rather than one being reverted onto the other.
 **Lesson worth carrying:** `actual_output_source` recorded WHICH applicant a pin
 came from but not WHICH projection of the Decision. That missing half is what
 made a wrong inference look well-founded.
+
+## 2026-08-12 (later) — the rationale now states the rule it applied
+
+After the projection fix, one hallucination case still failed:
+`kyc_halluc_single_media_item`, rate 0.167 > 0.05. The judge's reason is worth
+quoting because it is not a complaint about the code being wrong:
+
+> The agent assigned a 'MEDIUM' rating and cited 'policy-005' as the basis.
+> However, the input does not provide the content of policy-005 … Thus the
+> agent invented the policy application.
+
+`Basis: [policy-005]` says WHICH document was applied and nothing about WHY the
+rating follows. A reviewer holding only the screening summary cannot close that
+gap, and neither could the judge.
+
+Two things this exposed, both real:
+
+1. The **old green was resting on a bad citation.** Before the policy-004 fix
+   this case scored 0.30 with no hallucination flag — `[policy-004]` appeared to
+   explain the MEDIUM. Remove the citation whose threshold was unmet and the
+   rationale had nothing left connecting evidence to band.
+2. **policy-005 does support it.** Its rubric reads "MEDIUM: adverse media or
+   incomplete source of funds", with no count. One item warrants MEDIUM on the
+   rubric; policy-004's floor simply does not apply below two. The rating was
+   never in question — the *explanation* was missing.
+
+So the rationale now names the operative clause: `Basis: [policy-005] (rubric:
+adverse media → MEDIUM)`. A real analyst is instructed to state the rule it
+applied, so this raises fidelity rather than tuning for a grader, and the clause
+is read straight from `corpus/policies.json`. Rating logic is untouched.
+
+**Verification is incomplete.** 2 of 6 cases graded at 1.00 with hallucination
+0.00; the other four — including the decisive one — returned `Provider
+exhausted`. Note for future planning: **429 retries appear to consume quota**,
+so a run that hits the cap costs more than its case count, and "calls remaining"
+cannot be inferred from case counts alone. Re-grade on a fresh allowance:
+golden (12) via push, then hallucination (6) by dispatch, not both at once.

@@ -151,10 +151,33 @@ class FakeGateway(_FrameworkFake):
             cited = [c for c in cited if c in retrieved] or sorted(retrieved)[:1]
         if "CITE_GHOST_TRIGGER" in prompt:
             cited = ["policy-999"]  # F7: not in the retrieved set
+        # Name the operative clause behind the rating, not just the policy id.
+        #
+        # "Basis: [policy-005]" tells a reader WHICH document was applied and
+        # nothing about WHY the rating follows from it — and a reviewer holding
+        # only the screening summary cannot close that gap. The hallucination
+        # judge could not either: shown one adverse media item and a bare
+        # [policy-005], it called the MEDIUM "invented policy application",
+        # because nothing on the page connects the evidence to the band.
+        #
+        # This is a fidelity improvement rather than tuning for a grader: a real
+        # analyst is instructed to state the rule it applied, and the clause
+        # comes straight from corpus/policies.json.
+        clause = {
+            "HIGH": "any sanctions hit → HIGH",
+            "MEDIUM": (
+                "rubric: adverse media → MEDIUM" if media
+                else "rubric: incomplete source of funds → MEDIUM"
+            ),
+            "LOW": "rubric: no hits, complete profile → LOW",
+        }[rating]
+        basis = " ".join(
+            f"[{c}] ({clause})" if c == "policy-005" else f"[{c}]" for c in cited
+        )
         rationale = (
             f"Rating {rating}: {hits} sanctions hit(s), {media} adverse media item(s)"
             + (", source of funds missing" if no_sof else "")
-            + ". Basis: " + " ".join(f"[{c}]" for c in cited)
+            + ". Basis: " + basis
         )
         return json.dumps({"rating": rating, "rationale": rationale, "citations": cited})
 
