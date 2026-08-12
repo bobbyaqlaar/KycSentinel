@@ -1172,10 +1172,10 @@ rather than research's findings; rebind one of them if that ever changes.
 
 **Two follow-ups, neither done here:**
 
-1. `GROQ_API_KEY` is **not** a repository secret (`gh secret list` shows only
-   `ANTHROPIC_API_KEY_JUDGE` and `GEMINI_API_KEY`). Until it is set, CI skips
-   every judged gate and reports success — the exact silent-skip failure this
-   repo has already hit once.
+1. ~~`GROQ_API_KEY` is not a repository secret~~ — **set 2026-08-12 12:57Z and
+   confirmed working.** The first push on the Groq judge graded live in CI:
+   12/12 cases, overall **0.992 against the 0.95 threshold**, `kyc_005` at 0.90
+   exactly as calibrated locally. The gate is real again rather than skipping.
 2. The alternating-cron split exists solely because 22 calls did not fit 20/day.
    That constraint is gone. Running all three suites on every push is now
    affordable and gives faster feedback; the split is worth keeping only if the
