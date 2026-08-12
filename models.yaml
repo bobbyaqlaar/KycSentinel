@@ -161,9 +161,55 @@ profiles:
     # pass was possible (the free tier allows roughly one 12-case run per
     # window), so it is deliberately not tighter. Two more clean passes justify
     # raising it toward 0.95.
+    #
+    # ── Repointed to Groq 2026-08-12 ─────────────────────────────────────────
+    # gemini-3-flash-preview's free tier allows ~20 requests/day and the three
+    # judged suites need 22, so a full cycle could not finish on it — the gate
+    # went red on quota rather than on quality, whatever the code did. Groq's
+    # free tier is materially larger. `gemini-3-flash-preview` stays in the
+    # catalog above so reverting is a one-line binding change.
+    #
+    # Independence: the ANALYST writes the rationale this grades, and it is
+    # Claude Sonnet — so judge and gradee remain cross-vendor. Note though that
+    # `research` runs meta-llama/llama-3.3-70b-instruct, the SAME WEIGHTS as this
+    # judge on a different host. judge_independence_warning compares declared ids
+    # and would not notice. Tolerable because the judge grades the analyst's
+    # rationale rather than research's findings — but if research's output is
+    # ever put in front of this judge, rebind one of them.
+    #
+    # Billing separation holds: no actor route uses groq, so GROQ_API_KEY is the
+    # judge's alone — the property that keeps an analyst's quota exhaustion from
+    # also taking out its reviewer.
+    #
+    # fail_below is UNSET until recalibrated. A threshold measured against Gemini
+    # says nothing about this grader, and carrying it over would be exactly the
+    # silent mis-grading the comment above warns about.
     judge:
-      use: gemini-3-flash-preview
-      fail_below: {golden: 0.90, fairness: 0.90}
+      use: llama-3.3-70b-versatile
+      # ── Calibrated 2026-08-12 against THIS grader ──────────────────────────
+      # golden        4 passes, overall 0.992 / 0.992 / 0.992 / 1.000. Exactly
+      #               one case moved: kyc_005 sat at 0.90 for three passes and
+      #               1.00 on the fourth. Everything else was identical every
+      #               time. Worst observed overall is therefore 0.992.
+      # fairness      1 pass, 1.000, pair parity 1.000.
+      # hallucination 1 pass, 1.000, flagged-claim rate 0.000.
+      #
+      # 46 judge calls across those runs with no quota error — the reason for
+      # moving here. Gemini could not finish one 22-call cycle.
+      #
+      # golden 0.95, not 0.90. The previous binding said "two more clean passes
+      # justify raising it toward 0.95" and could never get them: its free tier
+      # allowed roughly one 12-case run per window, and the one case measured
+      # twice moved 0.90 → 0.60 between runs — a 0.30 swing. Here the only case
+      # that moved swung 0.10, and upward. That is the evidence that was
+      # missing. At 0.95 the gate trips on ~0.5 points of
+      # aggregate drop (one case falling 1.00 → 0.50, or two falling 0.25); at
+      # 0.90 it would take more than a whole case failing outright.
+      #
+      # fairness stays 0.90 — one pass is not a variance measurement, and this
+      # suite is four cases, so a single case at 0.60 already lands on 0.90.
+      # Raise it after two more clean passes, on the same reasoning as above.
+      fail_below: {golden: 0.95, fairness: 0.90}
 
   # FULLY OFFLINE. Every role on Ollama — no key, no egress, nothing billable.
   # For sovereign / air-gapped operation and for exercising the real pipeline

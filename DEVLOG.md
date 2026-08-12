@@ -1132,3 +1132,52 @@ exhausted`. Note for future planning: **429 retries appear to consume quota**,
 so a run that hits the cap costs more than its case count, and "calls remaining"
 cannot be inferred from case counts alone. Re-grade on a fresh allowance:
 golden (12) via push, then hallucination (6) by dispatch, not both at once.
+
+## 2026-08-12 — judge repointed to Groq; recalibrated; the red gate is green
+
+`gemini-3-flash-preview`'s free tier allows ~20 requests/day and the three
+judged suites need 22, so a full cycle could not finish on it regardless of what
+the code did. Repointed the `judge` role to `llama-3.3-70b-versatile` on Groq,
+already in both catalogs; `GROQ_API_KEY` was already configured locally and
+already passed through all three CI steps.
+
+**Calibration, 2026-08-12, against this grader:**
+
+| Suite | Passes | Result |
+|---|---|---|
+| golden | 4 | 0.992 / 0.992 / 0.992 / 1.000 — only `kyc_005` moved (0.90 ×3, then 1.00) |
+| fairness | 1 | 1.000, pair parity 1.000 |
+| hallucination | 1 | 1.000, flagged-claim rate 0.000 |
+
+46 judge calls, **no quota error**. Gemini could not complete one 22-call cycle.
+
+`fail_below` is now `{golden: 0.95, fairness: 0.90}` on the binding. Golden rises
+from 0.90 because the previous entry said "two more clean passes justify raising
+it toward 0.95" and its tier could never supply them — the one Gemini case
+measured twice swung 0.90 → 0.60. Here the only case that moved swung 0.10, and
+upward. Fairness stays at 0.90: one pass is not a variance measurement, and on a
+four-case suite a single 0.60 already lands exactly on 0.90.
+
+**This closes the outstanding verification.** `kyc_halluc_single_media_item` —
+0.30, then 0.00 with rate 1.000 after the projection bug, then the case the
+operative-clause fix was written for — scores **1.00, rate 0.000**. The
+hallucination gate is green on its merits, not by relaxing anything.
+
+**Independence.** The analyst writes the rationale being graded and is Claude
+Sonnet, so judge and gradee stay cross-vendor. Worth recording that `research`
+runs `meta-llama/llama-3.3-70b-instruct` — the same weights as this judge on a
+different host — and `judge_independence_warning` compares declared ids, so it
+would not notice. Tolerable while the judge grades the analyst's rationale
+rather than research's findings; rebind one of them if that ever changes.
+
+**Two follow-ups, neither done here:**
+
+1. `GROQ_API_KEY` is **not** a repository secret (`gh secret list` shows only
+   `ANTHROPIC_API_KEY_JUDGE` and `GEMINI_API_KEY`). Until it is set, CI skips
+   every judged gate and reports success — the exact silent-skip failure this
+   repo has already hit once.
+2. The alternating-cron split exists solely because 22 calls did not fit 20/day.
+   That constraint is gone. Running all three suites on every push is now
+   affordable and gives faster feedback; the split is worth keeping only if the
+   scheduled runs are wanted for their own sake. Left as-is deliberately —
+   collapsing it is a decision, not a cleanup.

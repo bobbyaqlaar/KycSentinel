@@ -17,8 +17,9 @@ evidence-mandated rating floor, pair parity) → auto-approve (LOW) or HITL
 (HIGH / flagged).
 
 Routes are declared per profile in `models.yaml`; `hybrid` is the default and
-`local` runs every role on Ollama. Two credentials: `OPENROUTER_API_KEY` and
-`GEMINI_API_KEY`.
+`local` runs every role on Ollama. Two credentials: `OPENROUTER_API_KEY` for the
+actor routes and `GROQ_API_KEY` for the judge — separate accounts on purpose, so
+exhausting an actor's quota cannot also take out its reviewer.
 
 ## Quick start (offline — zero keys, zero infra)
 
@@ -72,9 +73,9 @@ drivers, the framework security harness `--strict` (with
 credentials.
 
 The **golden / fairness / hallucination** gates need a judge model. The variable
-comes from the `judge` role in `models.yaml` — currently `GEMINI_API_KEY`
-(`gemini-3-flash-preview`, a different vendor from the analyst, so judge/actor
-separation is real rather than nominal). Without it each gate skips with a
+comes from the `judge` role in `models.yaml` — currently `GROQ_API_KEY`
+(`llama-3.3-70b-versatile`, a different vendor from the Claude analyst whose
+rationale it grades, so judge/actor separation is real rather than nominal). Without it each gate skips with a
 message naming the variable it wants rather than failing, so a fork with no
 secrets stays green.
 

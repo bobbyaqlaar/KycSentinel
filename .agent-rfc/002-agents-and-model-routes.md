@@ -9,7 +9,7 @@ Four model routes, chosen so multi-LLM is structural, not cosmetic:
 | Intake | `falcon3:3b` @ Ollama | Sovereign/in-border: raw PII text is parsed locally; the scrub runs before ANY cloud call. `degrade_to: null` — a PII route must never fail over to a cloud model. |
 | Research | `meta-llama/llama-3.3-70b-instruct` @ OpenRouter | High-volume retrieval + tool loops on the cheap tier, **plus its own one-line screening-summary LLM call** so the route is genuinely exercised, not only a degrade target (E2). |
 | Analyst | `anthropic/claude-sonnet-4.5` @ OpenRouter (frontier) | The one expensive judgment call; streamed (`complete_stream`, TTFT budget); degrade ladder → research → intake (F5). |
-| Judge | `gemini-3-flash-preview` @ Google AI Studio (**cross-vendor**, distinct from Analyst) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). **No `degrade_to` — the only role without one.** See "Why the judge does not degrade" below. |
+| Judge | `llama-3.3-70b-versatile` @ Groq (**cross-vendor**, distinct from Analyst) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). **No `degrade_to` — the only role without one.** See "Why the judge does not degrade" below. |
 
 ## The rating floor is enforced on evidence, not on the rating
 
