@@ -79,23 +79,22 @@ rationale it grades, so judge/actor separation is real rather than nominal). Wit
 message naming the variable it wants rather than failing, so a fork with no
 secrets stays green.
 
-With the secret set, the three gates run on **different triggers**, because they
-do not all fit in one day's judge quota — 22 calls against a free tier that
-allows 20 a day:
+With the secret set, **all three gates run on every push** — golden (12 judge
+calls), fairness (4) and hallucination (6), 22 in total:
 
-| Trigger | Suite | Judge calls |
+| Trigger | Suites | Judge calls |
 |---|---|---|
-| push / PR | golden | 12 |
-| cron Mon/Wed/Fri 08:30 UTC | fairness | 4 |
-| cron Tue/Thu 08:30 UTC | hallucination | 6 |
-| `workflow_dispatch` (`judged_suites` input) | one chosen suite | 4–12 |
+| push / PR | golden + fairness + hallucination | 22 |
+| `workflow_dispatch` (`judged_suites` input) | `all` by default, or one suite | 4–22 |
 
-No gate is removed or loosened — each runs less often. Fairness and
-hallucination alternate days so the heaviest day (a push plus the hallucination
-cron) is 18, inside the cap. **The free tier affords one graded push per day**;
-a second errors on quota. A paid tier removes that with no other change, since
-the route and its calibrated threshold travel with the `judge` role in
-`models.yaml`.
+They ran on alternating crons until 2026-08-12, when the judge moved to Groq.
+That split existed only because the previous judge's free tier allowed 20 calls
+a day and the suites need 22, so a full cycle went red on quota rather than on
+quality. Groq absorbed 46 calls during calibration without one quota error, so
+the split was retired: a gate that reports two days late is a weaker gate.
+
+`judged_suites` survives for re-running one suite against a fixture change
+without paying for the other two — no longer a quota workaround.
 
 Thresholds are **not** passed on the command line. They live on the `judge` role
 and were measured against the grader that produced them, so repointing the judge

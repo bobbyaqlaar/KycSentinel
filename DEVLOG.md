@@ -1181,3 +1181,36 @@ rather than research's findings; rebind one of them if that ever changes.
    affordable and gives faster feedback; the split is worth keeping only if the
    scheduled runs are wanted for their own sake. Left as-is deliberately —
    collapsing it is a decision, not a cleanup.
+
+## 2026-08-12 — cron split retired; all three suites gate every push
+
+The alternating-cron split existed for exactly one reason: 22 judge calls
+against gemini-3-flash-preview's 20/day. Groq removed that constraint —
+calibration ran 46 calls without a quota error — so the split is gone rather
+than kept "just in case".
+
+The argument for removing it is latency, not tidiness. A suite on a Tue/Thu cron
+reports up to two days after the commit that broke it, which is long enough for
+the offending change to be built on. That is a weaker gate, and it is precisely
+what happened: the projection regression landed on 08-09 and was not visible
+until Tuesday's run on 08-11.
+
+    push / PR   golden + fairness + hallucination   22 calls
+    dispatch    `judged_suites` — `all` by default, or one suite
+
+`judged_suites` survives with a different purpose: re-running one suite against
+a fixture change without paying for the other two. It is no longer a quota
+workaround, and its default moved from `golden` to `all` so a manual run now
+matches what a push does.
+
+`EVAL_RPM` rises 10 → 20. Pacing stays on — the daily cap is gone but a
+per-minute limit is not, and unpaced the suite still bursts past it, exhausts
+cost_router's retry and reports "judge was unreachable" with exit 0. 20/min is
+half the rate that ran clean during calibration, leaving headroom for a
+concurrent local run.
+
+The framework's OPERATIONS guidance was teaching the split as the remedy for a
+quota cap. It now says to treat it as temporary and prefer a judge whose quota
+fits, because the split trades correctness for latency — and because a grader
+with room to run a suite repeatedly gives you a variance measurement, which a
+constrained one never can.
