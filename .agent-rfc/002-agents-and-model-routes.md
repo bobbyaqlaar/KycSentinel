@@ -63,6 +63,32 @@ code that CITES it must test that threshold, not merely the presence of the
 evidence type. Grounding will not catch the difference, and neither will a
 hallucination rate.
 
+### Removing the wrong citation is only half of it
+
+Dropping `[policy-004]` left `Basis: [policy-005]` — and the hallucination judge
+then called the MEDIUM *"invented policy application"*, because nothing on the
+page connects one adverse-media item to that band. It was right to. A reviewer
+holding only the screening summary could not have justified it either.
+
+That is the more useful finding: the bad citation had been doing the
+explanatory work. `[policy-004]` looked like it accounted for the rating, so
+nobody noticed the rationale never said WHY the evidence produced the band —
+only WHICH document was consulted.
+
+So a rationale names the clause it applied, not just the policy id:
+
+    Basis: [policy-005] (rubric: adverse media → MEDIUM)
+
+The rating is unchanged and was never in question: policy-005's rubric grants
+MEDIUM for "adverse media or incomplete source of funds" with no count. The
+explanation was what was missing. A real analyst is instructed to state the rule
+it applied, so this raises fidelity rather than tuning for a grader — the clause
+is read from `corpus/policies.json`.
+
+**The rule for this codebase:** a citation identifies the source; it does not
+justify the conclusion. Any rationale that a human reviewer must be able to
+check needs both.
+
 ## Why the judge does not degrade
 
 Every other role falls back down the ladder on a provider failure. The judge

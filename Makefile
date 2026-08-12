@@ -20,9 +20,15 @@ worker:
 
 pin-evals:
 	# Record what this app currently produces as each eval case's actual_output.
-	# Covers golden, fairness AND hallucination. Hallucination was outside this
-	# loop for a while and its pins silently stopped matching the pipeline, so
-	# the suite judged text the app no longer produced (DEVLOG 2026-08-09).
+	#
+	# Covers golden, fairness AND hallucination — but NOT all with the same
+	# projection of the Decision. Golden and fairness pin the reviewer-facing
+	# render; hallucination pins the rationale alone, because that suite asks
+	# whether every claim is grounded in the retrieved set its case declares.
+	# Pinning the full render there cited policies those cases never retrieved
+	# and drove the hallucination rate from 0.000 to 1.000 on a codebase that
+	# had not regressed (DEVLOG 2026-08-12). If you add a suite, decide which
+	# projection it judges before adding it to the loop.
 	# Without it, run-evals.py generates responses with the FRAMEWORK's generic
 	# code-writing pipeline and judges those against KYC references — scoring
 	# ~0 no matter how the agents behave. Re-run after any deliberate change to
