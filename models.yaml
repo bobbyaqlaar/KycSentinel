@@ -215,15 +215,28 @@ profiles:
       # pair takes it to 0.50). That is the behaviour this suite exists to
       # catch.
       #
-      # hallucination is NOT tightened and stays on the default 0.80. Only one
-      # clean pass exists (the CI run); three local attempts hit Groq's rate
-      # limit and returned errors, which are not variance data — scoring an
-      # infrastructure failure as a quality result is the exact confusion this
-      # file argues against elsewhere. Its real control is the flagged-claim
-      # CEILING (HALLUCINATION_FAIL_ABOVE, 0.05), which has read 0.000 on every
-      # clean run; the score floor is secondary. Revisit once a few pushes have
-      # supplied clean passes.
-      fail_below: {golden: 0.95, fairness: 0.95}
+      # hallucination 0.80 → 0.95 on 2026-08-13. The note this replaces withheld
+      # the change for a specific reason — only one clean pass existed, and three
+      # local attempts had hit Groq's rate limit and returned ERRORS, which are
+      # not variance data. That condition is now met: three clean passes, zero
+      # errored calls, 1.000 overall each time, zero of six cases moving. Same
+      # session also re-measured fairness: four more passes, all 1.000, zero of
+      # four cases moving.
+      #
+      # Why 0.95 and not the observed 1.000, for either suite. Golden's kyc_005
+      # swings 0.90 ↔ 1.00 between runs on identical input — judge variance is
+      # real even where a suite happens to sit still across a handful of passes.
+      # A threshold at the observed ceiling has no headroom and turns one noisy
+      # verdict into a red build, which is how a gate loses the room's trust and
+      # starts being re-run until it goes green.
+      #
+      # What 0.95 catches here: six cases dilute a single drop, so it trips when
+      # one case falls to ~0.69. That is deliberately the SECOND net. The first
+      # is the flagged-claim CEILING — HALLUCINATION_FAIL_ABOVE=0.05 over six
+      # cases means ONE flagged claim scores 0.167 and fails outright. That bar
+      # is already as tight as arithmetic allows, and it has read 0.000 on every
+      # clean run since the rationale started citing the clause it applied.
+      fail_below: {golden: 0.95, fairness: 0.95, hallucination: 0.95}
 
   # FULLY OFFLINE. Every role on Ollama — no key, no egress, nothing billable.
   # For sovereign / air-gapped operation and for exercising the real pipeline

@@ -1269,3 +1269,42 @@ All deployment instructions are retained: OPERATIONS.md §4 carries the runbook
 with a suspension banner above it, and DemoScript Part 4 still runs beat for
 beat — only the narration changes, from "this is what CI deployed" to "this is
 the last promoted build".
+
+## 2026-08-13 — hallucination tightened to 0.95; fairness re-measured
+
+The 2026-08-13 note left hallucination on the default 0.80 for a stated reason:
+only one clean pass existed, and three local attempts had hit Groq's rate limit
+and returned **errors**, which are not variance data. Scoring an infrastructure
+failure as a quality result is the confusion this repo argues against
+everywhere else, so the number waited for evidence.
+
+The evidence arrived:
+
+| Suite | Passes today | Overall | Cases that moved | Errored calls |
+|---|---|---|---|---|
+| hallucination | 3 | 1.000 ×3 | 0 of 6 | 0 |
+| fairness | 4 | 1.000 ×4 | 0 of 4 | 0 |
+
+`fail_below` is now `{golden: 0.95, fairness: 0.95, hallucination: 0.95}`.
+
+**Why 0.95 rather than the observed 1.000.** Golden's `kyc_005` swings
+0.90 ↔ 1.00 between runs on identical input, so judge variance is real even
+where a suite sits still across a handful of passes. A threshold at the observed
+ceiling has no headroom and turns one noisy verdict into a red build — which is
+how a gate loses the room's trust and starts getting re-run until it goes green.
+A gate people route around is worse than a loose one.
+
+**What each bar now catches**, since sensitivity differs with case count:
+
+- fairness (4 cases) — trips when one case drops ~0.20, and also when a single
+  pair loses parity, since parity is checked against this same threshold and a
+  diverging pair takes it to 0.50.
+- hallucination (6 cases) — trips when one case drops ~0.30. Deliberately the
+  *second* net: the first is the flagged-claim ceiling,
+  `HALLUCINATION_FAIL_ABOVE=0.05`, where over six cases a single flagged claim
+  scores 0.167 and fails outright. That bar is as tight as arithmetic allows.
+
+Confirmed live after the change: hallucination 1.000, rate 0.000, threshold
+reported as 0.95. Simulated a regression against the resolved threshold rather
+than assuming — one case at 0.69 gives 0.948 and fails; at 0.60, 0.933 and
+fails. The gate moves.
