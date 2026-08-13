@@ -1247,3 +1247,25 @@ The banner printed before that guard, so the report contradicted its own exit
 code. Fixed framework-side: the banner now reads `NO VERDICT (judge
 unreachable)`. Worth noting how it was found — a threshold change I was
 verifying looked like it had broken fairness, and it had not.
+
+## 2026-08-12 — GCP promotion suspended until further notice
+
+Automatic promotion is off by request. `cd-staging.yml`'s `push:` trigger is
+commented out, not deleted; the job, the WIF auth, the Cloud Build step and the
+Cloud Run Job deploy are all retained unchanged. Resuming is uncommenting three
+lines.
+
+`workflow_dispatch` is deliberately left enabled. Suspending *automatic*
+promotion is not the same as removing the ability to deploy on purpose — if
+manual runs should be gated too, the change is `if: false` on the job.
+
+**Nothing was torn down.** `kyc-sentinel-smoke` and its last execution stay up
+in project `kycsentinel`; the last successful promotion was 2026-08-12 20:35Z
+from `8880e3e`. What is live is therefore a **snapshot**, not head of `main`,
+and will drift from it. Anyone reading Cloud Run to answer "what does the app
+do today" should check that date first.
+
+All deployment instructions are retained: OPERATIONS.md §4 carries the runbook
+with a suspension banner above it, and DemoScript Part 4 still runs beat for
+beat — only the narration changes, from "this is what CI deployed" to "this is
+the last promoted build".

@@ -18,9 +18,22 @@
 
 name: "CD: Staging Smoke Deploy"
 
+# ── GCP PROMOTION SUSPENDED (2026-08-12, until further notice) ────────────────
+# Automatic promotion on push is switched off by request. The `push:` trigger
+# below is commented out rather than deleted, and everything else — the job, the
+# WIF auth, the deploy steps, the runbooks in OPERATIONS.md — is retained
+# unchanged, so resuming is uncommenting four lines.
+#
+# `workflow_dispatch` is deliberately LEFT ENABLED: suspending *automatic*
+# promotion is not the same as removing the ability to deploy on purpose. Say
+# the word if you want manual runs gated too, and this becomes `if: false` on
+# the job instead.
+#
+# Nothing already deployed is torn down by this. The Cloud Run resources stay
+# up and serving whatever was last promoted; they simply stop being replaced.
 on:
-  push:
-    branches: ["main"]
+  # push:                                   # SUSPENDED — see banner above
+  #   branches: ["main"]
   workflow_dispatch: {}
 
 concurrency:
