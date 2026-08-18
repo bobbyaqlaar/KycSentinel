@@ -29,10 +29,18 @@ on:
 # gemini-3-flash-preview's free tier the three suites needed 22 judge calls
 # against a 20/day allowance, so a run attempting all of them exhausted the
 # quota partway through the last one and went red on infrastructure rather than
-# on quality. That constraint is gone — the judge moved to
-# llama-3.3-70b-versatile on Groq (models.yaml, calibrated 2026-08-12), which
-# absorbed 46 calls across four golden passes plus fairness and hallucination
-# with no quota error at all.
+# on quality.
+#
+# The judge has since moved twice — to llama-3.3-70b-versatile on Groq
+# (2026-08-12), and back to gemini-3-flash-preview (2026-08-19) after Groq
+# decommissioned the Llama family and every judge call started returning HTTP
+# 404. The split stays retired across both moves, but note the reason changed:
+# it is no longer "Groq's quota is larger", it is that Gemini itself now
+# completes full 22-call cycles when PACED at EVAL_RPM=12. Unpaced it does not.
+#
+# If you see judged suites reporting NO VERDICT, check EVAL_RPM before assuming
+# the quota is exhausted — and check it before restoring the split, which cost a
+# day of latency on two of the three gates.
 #
 # So the split is retired rather than kept "just in case": it cost a day of
 # latency on two of the three gates, and a gate that reports two days late is a

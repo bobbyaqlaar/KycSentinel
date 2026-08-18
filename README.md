@@ -73,11 +73,21 @@ drivers, the framework security harness `--strict` (with
 credentials.
 
 The **golden / fairness / hallucination** gates need a judge model. The variable
-comes from the `judge` role in `models.yaml` — currently `GROQ_API_KEY`
-(`llama-3.3-70b-versatile`, a different vendor from the Claude analyst whose
+comes from the `judge` role in `models.yaml` — currently `GEMINI_API_KEY`
+(`gemini-3-flash-preview`, a different vendor from the Claude analyst whose
 rationale it grades, so judge/actor separation is real rather than nominal). Without it each gate skips with a
 message naming the variable it wants rather than failing, so a fork with no
 secrets stays green.
+
+The judge moved here on 2026-08-19, after Groq decommissioned the entire Llama
+family and `llama-3.3-70b-versatile` began returning HTTP 404 on every call.
+Worth knowing how that presented, because it is the failure mode this repo's
+own gates are designed around: **nothing went red.** Each suite reported
+`NO VERDICT (judge unreachable)` and exited 0 — correct, since a judge that
+cannot be reached is an infrastructure failure rather than a quality result —
+so CI stayed green while grading nothing for several days. If you take one
+operational habit from this repo, take this one: on a judged gate, read the
+run's output rather than trusting the tick.
 
 With the secret set, **all three gates run on every push** — golden (12 judge
 calls), fairness (4) and hallucination (6), 22 in total:

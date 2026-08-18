@@ -36,6 +36,51 @@ catalog:
     cost_per_input_token: 0.0
     cost_per_output_token: 0.0
 
+  # ── Local judge candidates — MEASURED 2026-08-18, both rejected ───────────
+  # Both are families no ACTOR route uses: Gemma is Google, Granite is IBM,
+  # while research is Llama and analyst is Claude. That is the property being
+  # tested — a local judge is only worth having if it is independent AND can
+  # actually grade, and the second half is where local graders have failed here
+  # before (see the `local` profile note on qwen2.5 and falcon3:3b).
+  #
+  # Same protocol as the hosted judges: 4 passes per suite, temperature 0,
+  # identical deterministic app output (KYC_FAKE_LLM=1), so only the grader
+  # varies. Reference column is the retired llama-3.3-70b judge.
+  #
+  #                    golden   fairness   hallucination     reference judge
+  #   gemma3:4b        0.904     1.000        0.367          0.992 / 1.000 / 1.000
+  #   granite3.3:8b    ALL CASES ERRORED — every call timed out
+  #
+  # gemma3:4b is the interesting one, and the reason it is NOT bound: it was
+  # byte-identical across all four passes — ZERO variance, better stability than
+  # either hosted judge — but it scores the hallucination suite 0.367 against a
+  # pipeline the reference judge scored 1.000. Perfectly reproducible at the
+  # wrong level is worse than noisy at the right one: it fails a correct build
+  # every single time, which is unarguable and unfixable by a threshold that
+  # still means anything. Fairness it grades exactly right (1.000).
+  #
+  # granite3.3:8b is a HOST limit, not a model verdict: 6.0 GB resident on an
+  # 8 GB machine swaps, and a 578-character judge prompt took >120s and hit the
+  # client timeout. One pass burned 49 minutes and returned 22 errors. It may
+  # well be a fine grader on a machine that fits it.
+  #
+  # Do NOT reach for deepseek-r1 at these sizes as a substitute: the 7b and 8b
+  # tags are distills on QWEN and LLAMA bases. The id says DeepSeek, the lineage
+  # does not, and judge_independence_warning compares ids — so it would read as
+  # independent of `research` while sharing its base.
+  #
+  # Sized for this host deliberately: 8 GB unified memory on an M3, so ~5 GB is
+  # the practical ceiling with the OS and harness resident. gpt-oss:20b — the
+  # local build of the hosted judge — needs roughly 14 GB and does not fit.
+  "gemma3:4b":
+    provider: ollama
+    cost_per_input_token: 0.0
+    cost_per_output_token: 0.0
+  "granite3.3:8b":
+    provider: ollama
+    cost_per_input_token: 0.0
+    cost_per_output_token: 0.0
+
   # ── OpenRouter — the live routes ──────────────────────────────────────────
   # One OpenAI-compatible endpoint fronting both vendors, so one credential
   # covers research and analyst. Ids and pricing verified against
@@ -59,15 +104,31 @@ catalog:
     cost_per_input_token: 0.000003      # $3 / M — same as Anthropic direct
     cost_per_output_token: 0.000015     # $15 / M
 
-  # ── Present but unbound: the direct routes these replaced ─────────────────
-  # Both credentials were rejected on 2026-08-02 — Groq 403 (error 1010) and
-  # Anthropic 401 ("API key is invalid", not a billing error). Kept in the
-  # catalog so restoring either is a one-line binding change once its account
-  # is working, which is exactly what separating catalog from profiles buys.
-  llama-3.3-70b-versatile:
+  # ── The judge route ───────────────────────────────────────────────────────
+  # OpenAI open-weights, served by Groq. The vendor of the WEIGHTS is what
+  # judge independence turns on, and this is neither Llama (research) nor
+  # Anthropic (analyst), so it is independent of both actors on this profile.
+  #
+  # It replaced llama-3.3-70b-versatile on 2026-08-17, when Groq decommissioned
+  # the entire Llama family: every judge call returned HTTP 404 model_not_found.
+  # Nothing went red — the suites reported NO VERDICT and the gates skipped, by
+  # design — so the failure was invisible until someone read a run's output.
+  # That is the standing hazard of a hosted judge on a free tier: the model can
+  # be withdrawn under you between one green run and the next. If this 404s
+  # again, list https://api.groq.com/openai/v1/models and rebind here.
+  #
+  # Do not swap in qwen/qwen3.6-27b without checking output: it answers HTTP 200
+  # with empty message content on this prompt shape, which grades as an error.
+  openai/gpt-oss-120b:
     provider: groq
-    cost_per_input_token: 0.00000059
-    cost_per_output_token: 0.00000079
+    cost_per_input_token: 0.00000015   # $0.15 / M
+    cost_per_output_token: 0.00000075  # $0.75 / M
+
+  # ── Present but unbound: the direct route this replaced ───────────────────
+  # Credential rejected on 2026-08-02 — Anthropic 401 ("API key is invalid",
+  # not a billing error). Kept in the catalog so restoring it is a one-line
+  # binding change once the account is working, which is exactly what
+  # separating catalog from profiles buys.
   claude-sonnet-4-6:
     provider: anthropic
     cost_per_input_token: 0.000003
@@ -162,40 +223,65 @@ profiles:
     # window), so it is deliberately not tighter. Two more clean passes justify
     # raising it toward 0.95.
     #
-    # ── Repointed to Groq 2026-08-12 ─────────────────────────────────────────
-    # gemini-3-flash-preview's free tier allows ~20 requests/day and the three
-    # judged suites need 22, so a full cycle could not finish on it — the gate
-    # went red on quota rather than on quality, whatever the code did. Groq's
-    # free tier is materially larger. `gemini-3-flash-preview` stays in the
-    # catalog above so reverting is a one-line binding change.
+    # ── Back on Gemini 2026-08-19 ────────────────────────────────────────────
+    # The Groq binding died: Groq decommissioned the whole Llama family and
+    # `llama-3.3-70b-versatile` began returning HTTP 404 model_not_found on
+    # every call. See the catalog entry for how invisible that was.
+    #
+    # This route was previously abandoned FOR QUOTA — "~20 requests/day against
+    # the 22 the three suites need". That constraint no longer binds: a full
+    # 22-call cycle completed on 2026-08-19 with one transient error, and the
+    # cycle before it completed clean. Do not restore the alternating-cron split
+    # on the strength of the old note without re-measuring; it cost a day of
+    # latency on two of the three gates.
+    #
+    # PACING IS LOAD-BEARING on this tier, though. EVAL_RPM=12 is what the
+    # calibration ran at. Unpaced, this key returns errors — and an all-errored
+    # suite does not go red, it reports NO VERDICT and exits 0.
     #
     # Independence: the ANALYST writes the rationale this grades, and it is
-    # Claude Sonnet — so judge and gradee remain cross-vendor. Note though that
-    # `research` runs meta-llama/llama-3.3-70b-instruct, the SAME WEIGHTS as this
-    # judge on a different host. judge_independence_warning compares declared ids
-    # and would not notice. Tolerable because the judge grades the analyst's
-    # rationale rather than research's findings — but if research's output is
-    # ever put in front of this judge, rebind one of them.
+    # Claude Sonnet — so judge and gradee are cross-vendor. This binding is also
+    # strictly better than the Groq one on that axis: `research` runs
+    # meta-llama/llama-3.3-70b-instruct, which was the SAME WEIGHTS as the old
+    # judge on a different host — judge_independence_warning compares declared
+    # ids and never noticed. Google weights share a lineage with no actor route
+    # on this profile.
     #
-    # Billing separation holds: no actor route uses groq, so GROQ_API_KEY is the
-    # judge's alone — the property that keeps an analyst's quota exhaustion from
+    # Billing separation holds: GEMINI_API_KEY is its own account, used by no
+    # actor route — the property that keeps an analyst's quota exhaustion from
     # also taking out its reviewer.
-    #
-    # fail_below is UNSET until recalibrated. A threshold measured against Gemini
-    # says nothing about this grader, and carrying it over would be exactly the
-    # silent mis-grading the comment above warns about.
     judge:
-      use: llama-3.3-70b-versatile
-      # ── Calibrated 2026-08-12 against THIS grader ──────────────────────────
+      use: gemini-3-flash-preview
+      # ── RECALIBRATION IN PROGRESS, 2026-08-19 ─────────────────────────────
+      # Against gemini-3-flash-preview at EVAL_RPM=12, temperature 0, identical
+      # deterministic output. Observed so far:
+      #
+      #   golden        1.000 (2026-08-18), 1.000 (pass 1) — 0 errors both times
+      #   fairness      1.000 (pass 1) — 0 errors
+      #   hallucination 0.800 (2026-08-18), 0.940 (pass 1, ONE case errored)
+      #
+      # golden and fairness are set below. HALLUCINATION IS NOT YET SETTLED and
+      # is deliberately left at the conservative 0.80 it carried before the
+      # 2026-08-13 tightening: its two observations differ by 0.14, which is too
+      # wide to place a bar inside honestly. Passes 2–4 are what resolve it —
+      # raise it only on the evidence, the way fairness and hallucination each
+      # earned 0.95 under the retired judge.
+      #
+      # The errored case in pass 1 matters more than the 0.940 does. Under the
+      # 100%-graded rule ONE error means the suite cannot pass at all: it reports
+      # NO VERDICT (graded 5/6) and exits 0. On a free tier with transient
+      # errors that is the common case, not the rare one, and it is green.
+      #
+      # ── Calibrated 2026-08-12 against the RETIRED llama-3.3-70b judge ──────
+      # Kept because it is the reasoning behind the 0.95 bars, and because the
+      # numbers above are read against it. Groq withdrew that model on
+      # 2026-08-17; see the catalog entry.
       # golden        4 passes, overall 0.992 / 0.992 / 0.992 / 1.000. Exactly
       #               one case moved: kyc_005 sat at 0.90 for three passes and
       #               1.00 on the fourth. Everything else was identical every
       #               time. Worst observed overall is therefore 0.992.
       # fairness      1 pass, 1.000, pair parity 1.000.
       # hallucination 1 pass, 1.000, flagged-claim rate 0.000.
-      #
-      # 46 judge calls across those runs with no quota error — the reason for
-      # moving here. Gemini could not finish one 22-call cycle.
       #
       # golden 0.95, not 0.90. The previous binding said "two more clean passes
       # justify raising it toward 0.95" and could never get them: its free tier
@@ -236,7 +322,11 @@ profiles:
       # cases means ONE flagged claim scores 0.167 and fails outright. That bar
       # is already as tight as arithmetic allows, and it has read 0.000 on every
       # clean run since the rationale started citing the clause it applied.
-      fail_below: {golden: 0.95, fairness: 0.95, hallucination: 0.95}
+      # hallucination 0.80 is PROVISIONAL — see "RECALIBRATION IN PROGRESS".
+      # Explicit rather than omitted: leaving a suite out resolves to the same
+      # 0.80 via EVAL_FAIL_BELOW, but then the bar is a default nobody chose
+      # rather than a number someone argued for.
+      fail_below: {golden: 0.95, fairness: 0.95, hallucination: 0.80}
 
   # FULLY OFFLINE. Every role on Ollama — no key, no egress, nothing billable.
   # For sovereign / air-gapped operation and for exercising the real pipeline

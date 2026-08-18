@@ -9,7 +9,32 @@ Four model routes, chosen so multi-LLM is structural, not cosmetic:
 | Intake | `falcon3:3b` @ Ollama | Sovereign/in-border: raw PII text is parsed locally; the scrub runs before ANY cloud call. `degrade_to: null` — a PII route must never fail over to a cloud model. |
 | Research | `meta-llama/llama-3.3-70b-instruct` @ OpenRouter | High-volume retrieval + tool loops on the cheap tier, **plus its own one-line screening-summary LLM call** so the route is genuinely exercised, not only a degrade target (E2). |
 | Analyst | `anthropic/claude-sonnet-4.5` @ OpenRouter (frontier) | The one expensive judgment call; streamed (`complete_stream`, TTFT budget); degrade ladder → research → intake (F5). |
-| Judge | `llama-3.3-70b-versatile` @ Groq (**cross-vendor**, distinct from Analyst) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). **No `degrade_to` — the only role without one.** See "Why the judge does not degrade" below. |
+| Judge | `gemini-3-flash-preview` @ Google AI (**cross-vendor**, distinct from Analyst) | Judge/actor separation: the model grading a rationale must not be the one that wrote it, or the separation is nominal (E3). **No `degrade_to` — the only role without one.** See "Why the judge does not degrade" below. |
+
+The judge binding has now moved three times (Gemini → Groq/Llama → Gemini), and
+each move invalidated the calibrated thresholds, because **a score is a property
+of the (judge, suite) pair rather than of the application.** Measured on
+2026-08-18 against byte-identical deterministic output, four passes each, only
+the grader varying:
+
+| Judge | golden | fairness | hallucination |
+|---|---|---|---|
+| `llama-3.3-70b-versatile` (retired) | 0.992 | 1.000 | 1.000 |
+| `openai/gpt-oss-120b` @ Groq | 0.867–0.943 | 0.833–1.000 | 0.833–0.888 |
+| `gemma3:4b` local | 0.904 | 1.000 | 0.367 |
+| `granite3.3:8b` local | every call timed out on an 8 GB host | | |
+
+Two things that table is worth keeping for. Local models at temperature 0 are
+genuinely **deterministic** — Gemma was byte-identical across all four passes,
+better stability than any hosted judge — but Gemma grades the hallucination
+suite 0.367 where the reference graded 1.000, and a grader that is precisely
+wrong fails a correct build every time. Reproducibility is not calibration.
+
+Second: the judge had been grading at the *actor's* default temperature (0.2)
+for the framework's entire history — `scripts/eval_judge.py` simply never passed
+the argument. Sampling noise in the grader is indistinguishable from a quality
+change in the thing graded, and it lands directly on the threshold. It is now
+pinned at 0, which cut golden's observed spread from 0.125 to 0.076.
 
 ## The rating floor is enforced on evidence, not on the rating
 
