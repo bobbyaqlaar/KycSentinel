@@ -39,10 +39,9 @@ on:
 # completes full 22-call cycles when PACED at EVAL_RPM=12. Unpaced it does not.
 #
 # If you see judged suites reporting NO VERDICT, check EVAL_RPM before assuming
-# the quota is exhausted — and check it before restoring the split, which cost a
-# day of latency on two of the three gates.
+# the quota is exhausted.
 #
-# So the split is retired rather than kept "just in case": it cost a day of
+# The split stays retired rather than kept "just in case": it cost a day of
 # latency on two of the three gates, and a gate that reports two days late is a
 # weaker gate. Every push now grades golden (12), fairness (4) and
 # hallucination (6).
@@ -140,8 +139,10 @@ jobs:
       # models.yaml. Suites with too few cases also skip gracefully (exit 0).
       # THRESHOLD IS CALIBRATED and lives on the `judge` role in models.yaml,
       # not here. It was measured against the grader that produced it
-      # (gemini-3-flash-preview, 2026-07-30) and travels with that role, so
-      # repointing the judge cannot silently leave a stale number behind.
+      # (gemini-3-flash-preview, recalibrated 2026-08-19) and travels with that
+      # role, so repointing the judge cannot silently leave a stale number
+      # behind — a property this repo has now exercised twice, in both
+      # directions, and the hallucination bar is still PROVISIONAL because of it.
       # Passing --fail-below here would override it — that is why these steps
       # no longer do. Provenance and the measured numbers: models.yaml.
       - name: "Eval: golden scorecard"
@@ -158,14 +159,22 @@ jobs:
           GEMINI_API_KEY:           ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY:       ${{ secrets.OPENROUTER_API_KEY }}
           AGENT_OWNER_ID:           ci@kyc-sentinel
-          # Pacing stays on. It is not a quota workaround — that was the daily
-          # cap, and Groq removed it — but a per-minute limit still exists, and
-          # unpaced the suite bursts past it, exhausts cost_router's 4-attempt
-          # retry, and every case ends up erroring. run-evals then reports
-          # "judge was unreachable" and exits 0: the gate does not fail, it
-          # never grades. 20/min, half the rate that ran 46 calls clean during
-          # calibration, so there is headroom for a concurrent local run.
-          EVAL_RPM:                 "20"
+          # Pacing stays on, and the RATE IS PART OF THE CALIBRATION. A
+          # threshold is only valid at the pacing it was measured at: grade
+          # faster than the judge tolerates and cases error, and an errored case
+          # is not a low score — under the 100%-graded rule one error means the
+          # suite cannot pass at all.
+          #
+          # 12/min because that is what the 2026-08-19 recalibration ran at on
+          # gemini-3-flash-preview, completing full 22-call cycles. The previous
+          # value of 20 was inherited from the Groq binding ("half the rate that
+          # ran 46 calls clean") and did not survive the judge change — it was
+          # left pointing at a model that no longer exists.
+          #
+          # Unpaced or over-paced, this does not go red. run-evals reports
+          # "judge was unreachable" and exits 0: the gate does not fail, it never
+          # grades. That is the failure this whole file is arranged around.
+          EVAL_RPM:                 "12"
         run: >-
           python3 $AGENTSMITH_DIR/scripts/run-evals.py
           --skip-without-judge-credentials
@@ -184,14 +193,22 @@ jobs:
           GEMINI_API_KEY:           ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY:       ${{ secrets.OPENROUTER_API_KEY }}
           AGENT_OWNER_ID:           ci@kyc-sentinel
-          # Pacing stays on. It is not a quota workaround — that was the daily
-          # cap, and Groq removed it — but a per-minute limit still exists, and
-          # unpaced the suite bursts past it, exhausts cost_router's 4-attempt
-          # retry, and every case ends up erroring. run-evals then reports
-          # "judge was unreachable" and exits 0: the gate does not fail, it
-          # never grades. 20/min, half the rate that ran 46 calls clean during
-          # calibration, so there is headroom for a concurrent local run.
-          EVAL_RPM:                 "20"
+          # Pacing stays on, and the RATE IS PART OF THE CALIBRATION. A
+          # threshold is only valid at the pacing it was measured at: grade
+          # faster than the judge tolerates and cases error, and an errored case
+          # is not a low score — under the 100%-graded rule one error means the
+          # suite cannot pass at all.
+          #
+          # 12/min because that is what the 2026-08-19 recalibration ran at on
+          # gemini-3-flash-preview, completing full 22-call cycles. The previous
+          # value of 20 was inherited from the Groq binding ("half the rate that
+          # ran 46 calls clean") and did not survive the judge change — it was
+          # left pointing at a model that no longer exists.
+          #
+          # Unpaced or over-paced, this does not go red. run-evals reports
+          # "judge was unreachable" and exits 0: the gate does not fail, it never
+          # grades. That is the failure this whole file is arranged around.
+          EVAL_RPM:                 "12"
         run: >-
           python3 $AGENTSMITH_DIR/scripts/run-evals.py
           --suite fairness --skip-without-judge-credentials
@@ -210,14 +227,22 @@ jobs:
           GEMINI_API_KEY:           ${{ secrets.GEMINI_API_KEY }}
           OPENROUTER_API_KEY:       ${{ secrets.OPENROUTER_API_KEY }}
           AGENT_OWNER_ID:           ci@kyc-sentinel
-          # Pacing stays on. It is not a quota workaround — that was the daily
-          # cap, and Groq removed it — but a per-minute limit still exists, and
-          # unpaced the suite bursts past it, exhausts cost_router's 4-attempt
-          # retry, and every case ends up erroring. run-evals then reports
-          # "judge was unreachable" and exits 0: the gate does not fail, it
-          # never grades. 20/min, half the rate that ran 46 calls clean during
-          # calibration, so there is headroom for a concurrent local run.
-          EVAL_RPM:                 "20"
+          # Pacing stays on, and the RATE IS PART OF THE CALIBRATION. A
+          # threshold is only valid at the pacing it was measured at: grade
+          # faster than the judge tolerates and cases error, and an errored case
+          # is not a low score — under the 100%-graded rule one error means the
+          # suite cannot pass at all.
+          #
+          # 12/min because that is what the 2026-08-19 recalibration ran at on
+          # gemini-3-flash-preview, completing full 22-call cycles. The previous
+          # value of 20 was inherited from the Groq binding ("half the rate that
+          # ran 46 calls clean") and did not survive the judge change — it was
+          # left pointing at a model that no longer exists.
+          #
+          # Unpaced or over-paced, this does not go red. run-evals reports
+          # "judge was unreachable" and exits 0: the gate does not fail, it never
+          # grades. That is the failure this whole file is arranged around.
+          EVAL_RPM:                 "12"
         run: >-
           python3 $AGENTSMITH_DIR/scripts/run-evals.py
           --suite hallucination --skip-without-judge-credentials
