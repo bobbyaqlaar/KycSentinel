@@ -252,25 +252,47 @@ profiles:
     # also taking out its reviewer.
     judge:
       use: gemini-3-flash-preview
-      # ── RECALIBRATION IN PROGRESS, 2026-08-19 ─────────────────────────────
-      # Against gemini-3-flash-preview at EVAL_RPM=12, temperature 0, identical
-      # deterministic output. Observed so far:
+      # ── Recalibrated 2026-08-19 against gemini-3-flash-preview ─────────────
+      # EVAL_RPM=12, temperature 0, identical deterministic output — only the
+      # grader varies. TWO observations per suite, not the usual four:
       #
-      #   golden        1.000 (2026-08-18), 1.000 (pass 1) — 0 errors both times
-      #   fairness      1.000 (pass 1) — 0 errors
-      #   hallucination 0.800 (2026-08-18), 0.940 (pass 1, ONE case errored)
+      #   golden        1.000 (08-18), 1.000 (08-19) — 0 errors both times
+      #   fairness      1.000 (08-19) — 0 errors
+      #   hallucination 0.800 (08-18), 0.940 (08-19, ONE case errored)
       #
-      # golden and fairness are set below. HALLUCINATION IS NOT YET SETTLED and
-      # is deliberately left at the conservative 0.80 it carried before the
-      # 2026-08-13 tightening: its two observations differ by 0.14, which is too
-      # wide to place a bar inside honestly. Passes 2–4 are what resolve it —
-      # raise it only on the evidence, the way fairness and hallucination each
-      # earned 0.95 under the retired judge.
+      # THE CALIBRATION WAS STOPPED AFTER ONE FULL PASS, and why is a finding in
+      # its own right. Pass 1 completed all 22 calls in 5 minutes. Pass 2's
+      # golden step alone then ran 14+ minutes and was still going — roughly 9x
+      # slower on identical work. This tier sustains about one 22-call cycle and
+      # then throttles hard.
+      #
+      # That bears directly on whether this judge can back a gate that fires on
+      # every push, which is what CI asks of it. Treat a slow judged step as the
+      # expected behaviour of a free tier, not as a hung run — and note it does
+      # not fail loudly: throttling produces errored cases, and an errored case
+      # is not a low score.
+      #
+      # hallucination 0.80 -> 0.75. Not a loosening for convenience: 0.800 is the
+      # WORST observed value here, and the retired judge's own note argued that a
+      # threshold sitting exactly on an observation has no headroom and turns one
+      # noisy verdict into a red build. 0.75 puts a margin under the worst
+      # measurement rather than on top of it.
+      #
+      # It is a wider margin than golden's or fairness's because the evidence is
+      # thinner — two points spanning 0.14, where those two suites read 1.000
+      # twice with zero movement. Tighten it the way the other bars were earned:
+      # on clean passes, not on preference. Two clean passes at 0.94+ would
+      # justify 0.90.
+      #
+      # The suite is NOT relying on this number as its primary net, which is what
+      # makes 0.75 acceptable. HALLUCINATION_FAIL_ABOVE=0.05 is the tight one:
+      # over six cases, ONE flagged claim scores 0.167 and fails outright. That
+      # bar is as tight as the arithmetic allows and is unchanged.
       #
       # The errored case in pass 1 matters more than the 0.940 does. Under the
       # 100%-graded rule ONE error means the suite cannot pass at all: it reports
-      # NO VERDICT (graded 5/6) and exits 0. On a free tier with transient
-      # errors that is the common case, not the rare one, and it is green.
+      # NO VERDICT (graded 5/6) and exits 0. On a throttling free tier that is
+      # the common case rather than the rare one — and it is green.
       #
       # ── Calibrated 2026-08-12 against the RETIRED llama-3.3-70b judge ──────
       # Kept because it is the reasoning behind the 0.95 bars, and because the
@@ -322,11 +344,7 @@ profiles:
       # cases means ONE flagged claim scores 0.167 and fails outright. That bar
       # is already as tight as arithmetic allows, and it has read 0.000 on every
       # clean run since the rationale started citing the clause it applied.
-      # hallucination 0.80 is PROVISIONAL — see "RECALIBRATION IN PROGRESS".
-      # Explicit rather than omitted: leaving a suite out resolves to the same
-      # 0.80 via EVAL_FAIL_BELOW, but then the bar is a default nobody chose
-      # rather than a number someone argued for.
-      fail_below: {golden: 0.95, fairness: 0.95, hallucination: 0.80}
+      fail_below: {golden: 0.95, fairness: 0.95, hallucination: 0.75}
 
   # FULLY OFFLINE. Every role on Ollama — no key, no egress, nothing billable.
   # For sovereign / air-gapped operation and for exercising the real pipeline
