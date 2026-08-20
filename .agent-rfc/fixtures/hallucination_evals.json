@@ -104,5 +104,21 @@
         "text": "Adverse media. Two or more credible adverse media items within five years warrant at least a MEDIUM rating with citations to the items considered."
       }
     ]
+  },
+  {
+    "id": "kyc_halluc_ghost_citation",
+    "input": "Screen Layla Nasser, Nasser Textiles. Screening returned 0 sanctions hits and 0 adverse media items. Retrieved policies: policy-005.",
+    "expected_tool": "any",
+    "reference_output": "Rating LOW citing policy-005 only; no citation to any policy outside the retrieved set.",
+    "actual_output": "Rating LOW: 0 sanctions hit(s), 0 adverse media item(s). Basis: [policy-005] (rubric: no hits, complete profile \u2192 LOW) [policy-999] (enhanced due diligence waived for textile sector)",
+    "actual_output_source": "synthetic \u2014 mirrors F7 (agents/gateway.py:153)",
+    "score_hallucination": true,
+    "expect_hallucination": true,
+    "retrieved_context": [
+      {
+        "id": "policy-005",
+        "text": "Risk rating rubric. LOW: no hits, complete profile. MEDIUM: adverse media or incomplete source of funds. HIGH: any sanctions hit, PEP match, or refusal to provide documents."
+      }
+    ]
   }
 ]
