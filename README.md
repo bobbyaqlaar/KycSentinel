@@ -18,8 +18,8 @@ evidence-mandated rating floor, pair parity) → auto-approve (LOW) or HITL
 
 Routes are declared per profile in `models.yaml`; `hybrid` is the default and
 `local` runs every role on Ollama. Two credentials: `OPENROUTER_API_KEY` for the
-actor routes and `GROQ_API_KEY` for the judge — separate accounts on purpose, so
-exhausting an actor's quota cannot also take out its reviewer.
+actor routes and `GEMINI_API_KEY` for the judge — separate accounts on purpose,
+so exhausting an actor's quota cannot also take out its reviewer.
 
 ## Quick start (offline — zero keys, zero infra)
 
@@ -97,11 +97,13 @@ calls), fairness (4) and hallucination (6), 22 in total:
 | push / PR | golden + fairness + hallucination | 22 |
 | `workflow_dispatch` (`judged_suites` input) | `all` by default, or one suite | 4–22 |
 
-They ran on alternating crons until 2026-08-12, when the judge moved to Groq.
-That split existed only because the previous judge's free tier allowed 20 calls
-a day and the suites need 22, so a full cycle went red on quota rather than on
-quality. Groq absorbed 46 calls during calibration without one quota error, so
-the split was retired: a gate that reports two days late is a weaker gate.
+They ran on alternating crons until 2026-08-12, because this judge's free tier
+allows 20 requests and the suites need 22 — a full cycle went red on quota
+rather than on quality. The split was retired when the judge moved to Groq, and
+stayed retired after the move back: paced at `EVAL_RPM=12` a single uncontended
+run completes all 22 calls. Run two at once, or grade locally at the same time,
+and they starve each other. A gate that reports two days late is a weaker gate,
+but a gate that silently grades nothing is no gate at all — so read the run.
 
 `judged_suites` survives for re-running one suite against a fixture change
 without paying for the other two — no longer a quota workaround.
@@ -109,3 +111,17 @@ without paying for the other two — no longer a quota workaround.
 Thresholds are **not** passed on the command line. They live on the `judge` role
 and were measured against the grader that produced them, so repointing the judge
 cannot leave a stale number behind.
+
+## Licence
+
+GNU Affero General Public License v3.0 — see [LICENSE](./LICENSE).
+
+The same licence as [AgentSmith](https://github.com/bobbyaqlaar/AgentSmith), the
+framework this tenant exercises. Deliberately matched: a permissive reference
+implementation wrapped around a copyleft framework sends a confusing signal
+about what you may actually do with the pair.
+
+This repository is a **testbed tenant**, not a KYC product. It exists to prove
+the framework's controls against a realistic domain — sovereign PII routing,
+judge/actor separation, fairness pair parity, citation grounding, HITL gates.
+Do not deploy it as a compliance system.
