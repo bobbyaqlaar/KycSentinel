@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 
-from . import _framework
+from . import _framework  # noqa: F401 — SIDE-EFFECT import: puts the framework on sys.path for the imports below
 from ._framework import REPO_ROOT
 from .models import ApplicantProfile, ResearchFindings
 from .tools import registry

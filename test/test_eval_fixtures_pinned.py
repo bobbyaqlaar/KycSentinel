@@ -68,14 +68,52 @@ def test_every_case_is_pinned(suite: str) -> None:
     )
 
 
+def _is_synthetic(case: dict) -> bool:
+    """A case whose actual_output is written by hand, on purpose.
+
+    A positive control cannot be pinned from the pipeline: its output has to
+    CONTAIN the defect being detected, and the pipeline — correctly — does not
+    produce one. kyc_halluc_ghost_citation cites policy-999, which no retrieval
+    ever returns.
+
+    Mapping such a case to an applicant would let `make pin-evals` overwrite the
+    planted defect with clean output, at which point the control still passes
+    and no longer tests anything. That is a worse failure than an unmapped case,
+    because it is invisible.
+    """
+    return bool(case.get("expect_hallucination"))
+
+
 @pytest.mark.parametrize("suite", sorted(_SUITES))
 def test_every_case_is_mapped_to_an_applicant(suite: str) -> None:
     mapping, _ = _SUITES[suite]
-    unmapped = [c["id"] for c in _cases(suite) if c["id"] not in mapping]
+    unmapped = [
+        c["id"] for c in _cases(suite)
+        if c["id"] not in mapping and not _is_synthetic(c)
+    ]
     assert not unmapped, (
         f"{suite}: {unmapped} have no applicant mapping in "
         f"scripts/pin_eval_outputs.py, so `make pin-evals` skips them"
     )
+
+
+@pytest.mark.parametrize("suite", sorted(_SUITES))
+def test_synthetic_cases_are_not_pinnable_and_say_so(suite: str) -> None:
+    """The exemption above must stay narrow and self-declaring: a synthetic case
+    records where its output came from, and must NOT also be mapped — a mapping
+    would silently re-pin it clean on the next `make pin-evals`."""
+    mapping, _ = _SUITES[suite]
+    for case in _cases(suite):
+        if not _is_synthetic(case):
+            continue
+        assert case.get("actual_output_source", "").startswith("synthetic"), (
+            f"{case['id']}: a hand-written output must record actual_output_source "
+            "as synthetic, so nobody re-pins it from the pipeline by mistake"
+        )
+        assert case["id"] not in mapping, (
+            f"{case['id']}: synthetic cases must not be mapped in "
+            "pin_eval_outputs.py — pinning would overwrite the planted defect"
+        )
 
 
 @pytest.mark.parametrize("suite", sorted(_SUITES))
