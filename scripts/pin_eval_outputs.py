@@ -198,7 +198,16 @@ def _pin(path: Path, mapping: dict[str, str | tuple[str, ...]], render=None) -> 
     for case in cases:
         applicant = mapping.get(case["id"])
         if applicant is None:
-            print(f"   ⚠️  no applicant mapped for {case['id']} — left unpinned")
+            if case.get("expect_hallucination"):
+                # A positive control CANNOT be pinned: its output has to contain
+                # the defect being detected, and the pipeline correctly never
+                # produces one. Printing the same ⚠️ as a genuine omission
+                # invites someone to "fix" it by adding a mapping, which would
+                # overwrite the planted defect with clean output and leave a
+                # control that passes and tests nothing.
+                print(f"   ⏭️  {case['id']} is a positive control — synthetic by design, not pinnable")
+            else:
+                print(f"   ⚠️  no applicant mapped for {case['id']} — left unpinned")
             continue
         ids = (applicant,) if isinstance(applicant, str) else applicant
         outputs = [asyncio.run(_actual_output(a, render)) for a in ids]
