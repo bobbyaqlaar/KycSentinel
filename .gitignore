@@ -15,6 +15,13 @@ __pycache__/
 .agent-rfc/fixtures/fairness_eval_results.json
 .agent-rfc/fixtures/hallucination_eval_results.json
 .agent-rfc/fixtures/adversarial_eval_results.json
+.agent-rfc/fixtures/rag_poison_eval_results.json
+# Promote-time evidence pack (delivery_evidence.py). Generated, and generated
+# FROM the scorecards above — committing it publishes whatever happened to be
+# on disk, which on 2026-08-23 was a set of dry-run failure simulations graded
+# by `sim` rather than the tenant's judge.
+.agent-rfc/fixtures/delivery_evidence.json
+.agent-rfc/fixtures/delivery_evidence.md
 
 # OS / IDE
 .DS_Store

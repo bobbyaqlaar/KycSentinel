@@ -1308,3 +1308,57 @@ Confirmed live after the change: hallucination 1.000, rate 0.000, threshold
 reported as 0.95. Simulated a regression against the resolved threshold rather
 than assuming — one case at 0.69 gives 0.948 and fails; at 0.60, 0.933 and
 fails. The gate moves.
+
+---
+
+## 2026-08-24 — CI judged-suite schedule restored to fit the daily quota
+
+**The gates were green and grading nothing.** `ci.yml` ran all three judged
+suites on every push — golden 12 + fairness 4 + hallucination 6 = 22 judge
+calls. The judge is `gemini-3-flash-preview` on a free tier allowing **20
+requests per day, per project, per model**. Re-measured live against the
+endpoint on 2026-08-23:
+
+    429 RESOURCE_EXHAUSTED
+    quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier
+    quotaValue: 20   model: gemini-3-flash
+
+The header comment removed on 2026-08-19 argued the constraint "no longer
+binds" because one 22-call cycle had completed when paced at `EVAL_RPM=12`.
+That conflated two limits: pacing governs calls per MINUTE, the 20 is per DAY,
+and no rate stretches 22 into 20.
+
+What made it worth fixing over the latency it costs is the failure mode. An
+over-quota suite does not go red — every case errors, `run-evals` reports NO
+VERDICT and exits 0, and the check is GREEN. So "all three on every push" did
+not fail loudly on the second push of a day; it quietly stopped grading, and a
+green tick meant the suites had not run rather than that they passed.
+
+**Now:**
+
+| Trigger | Suite | Calls |
+|---|---|---|
+| push / PR | golden | 12 |
+| cron Mon/Wed/Fri 09:00 UTC | fairness | 4 |
+| cron Tue/Thu/Sat 09:00 UTC | hallucination | 6 |
+
+Worst case on a day is 12 + 6 = 18 of 20. The crons run at 01:00 America/
+Los_Angeles, just after the quota resets at midnight Pacific, so they grade
+against a full budget and leave the remainder for that day's pushes.
+
+Two pushes in one day still exceed the budget — unavoidable on this tier. What
+changed is that it is now visible: `run-evals.py` emits a GitHub warning
+annotation and a job-summary block whenever a gate was asked to grade and could
+not. `workflow_dispatch` still offers `all`, which is 22 calls; that is a
+deliberate manual act and the annotation will say if it starved.
+
+**Local judged-eval run.** The two-window split is still executing; the daily
+quota was already spent when it launched, so window 1 opens at the ~07:00Z
+reset. `split_eval.sh`'s window 2 could not have worked — it waits one hour,
+not one day, so its probes tested the same day's remainder and golden would
+have starved from case 4 while still logging SPLIT RUN COMPLETE.
+`~/.agentsmith-window2.sh` supersedes it: it gates on the Pacific date rolling
+AND a passing probe, and drives a queue that re-runs any suite still without a
+verdict, one window per daily reset, hallucination first. Its ghost-citation
+positive control has never been graded by a live judge; that is the result the
+run exists to obtain.

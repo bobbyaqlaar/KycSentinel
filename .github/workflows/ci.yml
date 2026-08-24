@@ -12,6 +12,13 @@ on:
   push:
     branches: [main]
   pull_request:
+  # 01:00 America/Los_Angeles = 08:00/09:00 UTC, just after the Gemini free
+  # tier's daily quota resets at midnight Pacific. Running the cron suites
+  # BEFORE the working day means they grade against a full budget and leave
+  # the remainder for that day's pushes, rather than competing with them.
+  schedule:
+    - cron: "0 9 * * 1,3,5"   # fairness       (4 judge calls)
+    - cron: "0 9 * * 2,4,6"   # hallucination  (6 judge calls)
   # Manual re-run. The v1.2.0 pin commit landed on main and GitHub never
   # dispatched a run for it; with no workflow_dispatch the only recovery
   # was an empty commit. cd-staging.yml already had this.
@@ -23,32 +30,44 @@ on:
         default: all
         options: [all, golden, fairness, hallucination, none]
 
-# All three judged suites run on every push.
+# WHICH JUDGED SUITES RUN WHEN, and why it is not "all of them, every push".
 #
-# They were split across alternating crons for one reason: on
-# gemini-3-flash-preview's free tier the three suites needed 22 judge calls
-# against a 20/day allowance, so a run attempting all of them exhausted the
-# quota partway through the last one and went red on infrastructure rather than
-# on quality.
+#   push / PR       golden          12 judge calls
+#   Mon/Wed/Fri     fairness         4
+#   Tue/Thu/Sat     hallucination    6
 #
-# The judge has since moved twice — to llama-3.3-70b-versatile on Groq
-# (2026-08-12), and back to gemini-3-flash-preview (2026-08-19) after Groq
-# decommissioned the Llama family and every judge call started returning HTTP
-# 404. The split stays retired across both moves, but note the reason changed:
-# it is no longer "Groq's quota is larger", it is that Gemini itself now
-# completes full 22-call cycles when PACED at EVAL_RPM=12. Unpaced it does not.
+# The judge is gemini-3-flash-preview on a free tier that allows **20 requests
+# per day, per project, per model**. All three suites together need 22. Running
+# them on every push was restored on 2026-08-19 on the strength of a note
+# saying the quota constraint "no longer binds" because a full 22-call cycle
+# had completed once when paced at EVAL_RPM=12.
 #
-# If you see judged suites reporting NO VERDICT, check EVAL_RPM before assuming
-# the quota is exhausted.
+# That reasoning conflated two different limits. Pacing governs calls per
+# MINUTE; the 20 is per DAY, and no rate stretches 22 into 20. Re-measured
+# 2026-08-23 against the live endpoint:
 #
-# The split stays retired rather than kept "just in case": it cost a day of
-# latency on two of the three gates, and a gate that reports two days late is a
-# weaker gate. Every push now grades golden (12), fairness (4) and
-# hallucination (6).
+#     429 RESOURCE_EXHAUSTED
+#     quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier
+#     quotaValue: 20   model: gemini-3-flash
 #
-# workflow_dispatch keeps the per-suite input. It is no longer a quota
-# workaround — it is for re-running one suite against a fixture change without
-# paying for the other two.
+# The failure mode is the reason this matters more than the latency it costs.
+# An over-quota suite does not go red — every case errors, run-evals reports
+# NO VERDICT and exits 0, and the check is GREEN. So "all three on every push"
+# does not fail loudly on the second push of a day; it silently stops grading
+# anything, and a green tick means the suites did not run rather than that they
+# passed. Splitting them keeps a day's worst case at 12 + 6 = 18 of 20.
+#
+# Two pushes in one day still exceed it — unavoidable on this tier. What
+# changed is that it is now VISIBLE: run-evals emits a GitHub warning
+# annotation and a job-summary block whenever a gate was asked to grade and
+# could not, so an ungraded gate is legible on a green run instead of silent.
+#
+# If EVAL_RPM is wrong you get the same NO VERDICT for a different reason —
+# check pacing before assuming the daily quota, and the annotation before
+# assuming either.
+#
+# workflow_dispatch keeps the per-suite input, for re-running one suite against
+# a fixture change without paying for the other two.
 
 jobs:
   test:
@@ -147,9 +166,10 @@ jobs:
       # no longer do. Provenance and the measured numbers: models.yaml.
       - name: "Eval: golden scorecard"
         if: >-
-          github.event.inputs.judged_suites == ''
-          || github.event.inputs.judged_suites == 'all'
-          || github.event.inputs.judged_suites == 'golden'
+          github.event_name == 'push' || github.event_name == 'pull_request'
+          || (github.event_name == 'workflow_dispatch'
+              && (github.event.inputs.judged_suites == 'all'
+                  || github.event.inputs.judged_suites == 'golden'))
         working-directory: KYC_Sentinel
         env:
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
@@ -181,9 +201,11 @@ jobs:
 
       - name: "Eval: fairness pair parity (policy-007)"
         if: >-
-          github.event.inputs.judged_suites == ''
-          || github.event.inputs.judged_suites == 'all'
-          || github.event.inputs.judged_suites == 'fairness'
+          github.event_name == 'workflow_dispatch'
+          && (github.event.inputs.judged_suites == 'all'
+              || github.event.inputs.judged_suites == 'fairness')
+          || github.event_name == 'schedule'
+          && github.event.schedule == '0 9 * * 1,3,5'
         working-directory: KYC_Sentinel
         env:
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
@@ -215,9 +237,11 @@ jobs:
 
       - name: "Eval: hallucination (F7 citation grounding)"
         if: >-
-          github.event.inputs.judged_suites == ''
-          || github.event.inputs.judged_suites == 'all'
-          || github.event.inputs.judged_suites == 'hallucination'
+          github.event_name == 'workflow_dispatch'
+          && (github.event.inputs.judged_suites == 'all'
+              || github.event.inputs.judged_suites == 'hallucination')
+          || github.event_name == 'schedule'
+          && github.event.schedule == '0 9 * * 2,4,6'
         working-directory: KYC_Sentinel
         env:
           ANTHROPIC_API_KEY:        ${{ secrets.ANTHROPIC_API_KEY }}
