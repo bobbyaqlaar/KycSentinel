@@ -2,7 +2,10 @@
 tenant:
   id: kyc-sentinel
   name: "KYC Sentinel (testbed)"
-  isolation: dedicated          # exercises runtime/k8s/dedicated-tenant/
+  isolation: dedicated          # A MARKER, not a control: it tells an operator
+                                # which manifests to apply (runtime/k8s/
+                                # dedicated-tenant/). No code reads it — the
+                                # topology is applied out of band.
   owner: bobbyaqlaar@gmail.com
 
 framework:
@@ -46,7 +49,7 @@ budget:
   monthly_usd_cap: 5            # deliberately small — F5 degrade demo fires
 
 workflow:
-  engine: temporal
+  engine: temporal                 # WORKER_BACKEND overrides
   task_queue: kyc-sentinel
 
 hitl:

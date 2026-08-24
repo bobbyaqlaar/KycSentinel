@@ -73,33 +73,45 @@ async def test_pipeline_outcomes_match_fixture_expectations(gateway, applicants)
             assert decision.outcome in ("approved", "hitl"), a["id"]
 
 
+# tenant.yaml DECLARES security.prompt_guard, and a declaration outranks the
+# environment — deliberately, so a stray export in someone's shell profile
+# cannot relax this tenant's posture. `config.override` is the channel for a
+# deliberate, scoped, in-process change: visible where it happens, impossible
+# to leave lying around in a profile. Setting PROMPT_GUARD here would now be
+# silently ignored, which is the point.
+def _guard(mode: str):
+    from runtime.config import override
+
+    return override(**{"security.prompt_guard": mode})
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["default", "block", "strict", ""])
-async def test_enforcing_modes_block_the_injection(gateway, monkeypatch, mode):
-    monkeypatch.setenv("PROMPT_GUARD", mode)
-    decision = await process_application(gateway, submission("inj-012"))
+async def test_enforcing_modes_block_the_injection(gateway, mode):
+    with _guard(mode):
+        decision = await process_application(gateway, submission("inj-012"))
     assert decision.outcome == "hitl"
     assert decision.rating is None
     assert decision.guard_reasons
 
 
 @pytest.mark.asyncio
-async def test_warn_mode_reports_without_blocking(gateway, monkeypatch):
+async def test_warn_mode_reports_without_blocking(gateway):
     """Regression: the pipeline called scan_prompt directly, which reports
     blocked=True on any hit regardless of PROMPT_GUARD — so this tenant's front
     door ignored the mode contract and `warn`, the observe-first tier the
     framework added in G9, could not be used at all. The findings must still
     ride along on the Decision, or observing is pointless."""
-    monkeypatch.setenv("PROMPT_GUARD", "warn")
-    decision = await process_application(gateway, submission("inj-012"))
+    with _guard("warn"):
+        decision = await process_application(gateway, submission("inj-012"))
     assert decision.rating is not None, "warn must not stop the pipeline"
     assert "instruction_override" in decision.guard_reasons
 
 
 @pytest.mark.asyncio
-async def test_off_mode_does_not_scan(gateway, monkeypatch):
-    monkeypatch.setenv("PROMPT_GUARD", "off")
-    decision = await process_application(gateway, submission("inj-012"))
+async def test_off_mode_does_not_scan(gateway):
+    with _guard("off"):
+        decision = await process_application(gateway, submission("inj-012"))
     assert decision.rating is not None
     assert decision.guard_reasons == []
 
