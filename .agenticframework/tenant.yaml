@@ -33,6 +33,15 @@ moderation:
   # classifier — framework G10. Lets this tenant run MODERATION_HOOK=required.
   hook: "agents.moderation:classify_output"
 
+# Security posture — every line is read, and each env var overrides its line.
+# Quoted on purpose: YAML 1.1 parses a bare `off` as the boolean false.
+security:
+  prompt_guard: "default"          # PROMPT_GUARD
+  input_guardrail: "default"       # INPUT_GUARDRAIL
+  tool_allowlist_strict: true      # TOOL_ALLOWLIST_STRICT — this tenant's
+                                   # security pack is graded --strict in CI
+  ip_redaction: false              # ENABLE_IP_REDACTION
+
 budget:
   monthly_usd_cap: 5            # deliberately small — F5 degrade demo fires
 
