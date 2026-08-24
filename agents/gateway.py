@@ -47,7 +47,13 @@ class FakeGateway(_FrameworkFake):
     does in production.
     """
 
-    def __init__(self, tenant_id: str = "kyc-sentinel") -> None:
+    # No hardcoded default. `tenant.id: kyc-sentinel` is declared in
+    # .agenticframework/tenant.yaml, and this file carried a second copy of it
+    # — the "config read from two places will disagree" shape, with the
+    # disagreement not yet arrived. LLMGateway now resolves it via
+    # runtime/tenancy.py: explicit argument, then AGENT_TENANT_ID, then the
+    # declaration. None here means "resolve it", not "unknown".
+    def __init__(self, tenant_id: str | None = None) -> None:
         super().__init__(
             tenant_id=tenant_id,
             providers={
@@ -188,4 +194,5 @@ def get_gateway(budget_cap_usd: Optional[float] = None):
     if fake_mode():
         return FakeGateway()
     from runtime.llm_gateway import LLMGateway
-    return LLMGateway(tenant_id="kyc-sentinel", budget_cap_usd=budget_cap_usd)
+    # tenant_id omitted deliberately — see the note on KycGateway.__init__.
+    return LLMGateway(budget_cap_usd=budget_cap_usd)

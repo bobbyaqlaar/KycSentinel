@@ -34,6 +34,7 @@ from runtime.prompt_guard import (
     apply_prompt_guard,
     is_enforcing,
 )
+from runtime.tenancy import agent_context, resolve_tenant_id
 from runtime.tracing import agent_span
 
 
@@ -79,7 +80,13 @@ async def process_application(gateway, submission: str, analyst_extra: str = "")
             guard_reasons=list(guard.reasons),
         )
 
-    tenant = getattr(gateway, "tenant_id", "kyc-sentinel")
+    # Identity is BOUND, not threaded. This line was
+    # `getattr(gateway, "tenant_id", "kyc-sentinel")` — a third copy of a value
+    # declared once in .agenticframework/tenant.yaml, and the fallback silently
+    # relabelled every span whenever the gateway was a test double. Bound once
+    # here, each step names only its role, and every span beneath — including
+    # the gateway's LLM spans and ToolRegistry's tool spans — inherits both.
+    tenant = resolve_tenant_id(getattr(gateway, "tenant_id", None))
     # In warn mode the call proceeds, but the findings still ride along on the
     # Decision — observe-first is only useful if you can actually see what
     # would have been blocked.
@@ -89,20 +96,21 @@ async def process_application(gateway, submission: str, analyst_extra: str = "")
     # counts, tool calls (auto-annotated by ToolRegistry.invoke), the judge
     # verdict — is visible in Phoenix alongside the gateway's LLM spans, not
     # just the model calls. No-ops cleanly when tracing is off.
-    with agent_span("intake", tenant_id=tenant) as span:
-        intake: IntakeResult = await run_intake(gateway, submission)
-        span.set_attribute("agent.pii_redactions", sum(intake.scrub_counts.values()))
+    with agent_context(tenant_id=tenant):
+        with agent_context(role="intake"), agent_span("intake") as span:
+            intake: IntakeResult = await run_intake(gateway, submission)
+            span.set_attribute("agent.pii_redactions", sum(intake.scrub_counts.values()))
 
-    with agent_span("research", tenant_id=tenant) as span:
-        findings = await run_research(gateway, intake.profile)
-        span.set_attribute("agent.sanctions_hits", len(findings.sanctions_hits))
+        with agent_context(role="research"), agent_span("research") as span:
+            findings = await run_research(gateway, intake.profile)
+            span.set_attribute("agent.sanctions_hits", len(findings.sanctions_hits))
 
-    with agent_span("analyst", tenant_id=tenant):
-        assessment = await run_analyst(gateway, intake.profile, findings, analyst_extra)
+        with agent_context(role="analyst"), agent_span("analyst"):
+            assessment = await run_analyst(gateway, intake.profile, findings, analyst_extra)
 
-    with agent_span("judge", tenant_id=tenant) as span:
-        verdict = await run_judge(gateway, assessment, findings)
-        span.set_attribute("agent.judge_flagged", verdict.flagged)
+        with agent_context(role="judge"), agent_span("judge") as span:
+            verdict = await run_judge(gateway, assessment, findings)
+            span.set_attribute("agent.judge_flagged", verdict.flagged)
 
     if assessment.rating == "HIGH" or verdict.flagged:
         outcome = "hitl"  # policy-006: high-impact → human decision

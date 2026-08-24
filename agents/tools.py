@@ -23,10 +23,9 @@ _CORPUS = REPO_ROOT / "corpus"
 registry = ToolRegistry(
     allowlist_path=REPO_ROOT / ".agent-rfc" / "security" / "tool_allowlist.yaml",
     strict=True,
-    # So the `agent.tool.*` spans this registry emits carry tenant.id like
-    # every other span — otherwise tool calls vanish from a per-tenant Phoenix
-    # filter (framework fix, same pass as the HITL gate).
-    tenant_id="kyc-sentinel",
+    # tenant_id is no longer passed: AgentIdentityProcessor stamps it on every
+    # span from the bound context, so the `agent.tool.*` spans this registry
+    # emits inherit it without a fourth copy of the id living here.
 )
 
 

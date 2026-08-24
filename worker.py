@@ -37,9 +37,40 @@ from workflows.activities import (  # noqa: E402
 from workflows.kyc_workflow import KycApplicationWorkflow  # noqa: E402
 
 
+def _otlp_exporter():
+    """OTLP exporter when an endpoint is configured, else None (spans stay local).
+
+    None is not a failure: a developer running the worker without Phoenix still
+    gets the provider, the Resource and the identity processor — so a span that
+    is never exported is still correctly attributed, and turning the endpoint on
+    later changes nothing but the destination.
+    """
+    endpoint = os.environ.get("AGENT_PHOENIX_ENDPOINT", "").strip()
+    if not endpoint:
+        return None
+    try:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+            OTLPSpanExporter,
+        )
+    except ImportError:
+        return None
+    return OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces")
+
+
 async def main() -> None:
     address = os.environ.get("TEMPORAL_ADDRESS", "localhost:7233")
     task_queue = os.environ.get("TASK_QUEUE", "kyc-sentinel")
+    # Install tracing BEFORE the worker starts. Until now this tenant — the one
+    # built to exercise every layer of the framework — installed no
+    # TracerProvider at all, so every `agent_span()` in it was a no-op and no
+    # span ever reached Phoenix. The documented three-step recipe produced zero
+    # correct setups here; configure_tracing() is one call that cannot be
+    # half-done. It carries the Resource (service/project/environment/owner) and
+    # the processor that stamps tenant.id and agent.role onto every span.
+    from runtime.tracing import configure_tracing
+
+    configure_tracing(exporter=_otlp_exporter())
+
     client = await connect_temporal()   # address + TEMPORAL_TLS + timeout, one place
     worker = Worker(
         client,

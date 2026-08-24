@@ -24,8 +24,16 @@ def exporter():
         InMemorySpanExporter,
     )
 
+    # Build the provider the way worker.py does, so this test exercises the
+    # real setup rather than a hand-assembled one. Without
+    # AgentIdentityProcessor the tenant.id assertion below would only pass
+    # because somebody threaded the kwarg — which is exactly how the framework
+    # came to believe "every span carries tenant.id" while most did not.
+    from runtime.tracing import AgentIdentityProcessor
+
     exp = InMemorySpanExporter()
     provider = TracerProvider()
+    provider.add_span_processor(AgentIdentityProcessor())
     provider.add_span_processor(SimpleSpanProcessor(exp))
     trace.set_tracer_provider(provider)
     if trace.get_tracer_provider() is not provider:
@@ -44,7 +52,13 @@ def test_pipeline_emits_step_and_tool_spans(exporter):
         assert step in by_name, f"missing {step}"
 
     assert by_name["agent.intake"]["agent.step"] == "intake"
+    # Not threaded by any call site any more — bound once in pipeline.py and
+    # stamped by the processor, which is the property worth asserting.
     assert by_name["agent.intake"]["tenant.id"] == "kyc-sentinel"
+    assert by_name["agent.intake"]["agent.role"] == "intake"
+    assert by_name["agent.judge"]["agent.role"] == "judge", "one worker, distinct roles"
+    for name, attrs in by_name.items():
+        assert "tenant.id" in attrs, f"{name} is unattributed"
     assert by_name["agent.research"]["agent.sanctions_hits"] >= 1
     assert by_name["agent.judge"]["agent.judge_flagged"] in (True, False)
 
