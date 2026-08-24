@@ -37,6 +37,9 @@ from workflows.activities import (  # noqa: E402
 from workflows.kyc_workflow import KycApplicationWorkflow  # noqa: E402
 
 
+from runtime.config import load_env_file, resolve  # noqa: E402
+
+
 def _otlp_exporter():
     """OTLP exporter when an endpoint is configured, else None (spans stay local).
 
@@ -59,7 +62,17 @@ def _otlp_exporter():
 
 async def main() -> None:
     address = os.environ.get("TEMPORAL_ADDRESS", "localhost:7233")
-    task_queue = os.environ.get("TASK_QUEUE", "kyc-sentinel")
+    # `workflow.task_queue: kyc-sentinel` has been declared in tenant.yaml since
+    # the scaffold and was read by nothing — this line carried a second copy of
+    # it as a default. Env still overrides, for running two workers off one
+    # checkout.
+    task_queue = resolve("workflow.task_queue", env_var="TASK_QUEUE", default="default")
+    # .env first, before anything reads configuration. The runtime loads no
+    # config file of its own, so a worker started outside a shell that had
+    # already exported everything ran silently on defaults — including a $150
+    # budget cap where tenant.yaml declares $5.
+    load_env_file()
+
     # Install tracing BEFORE the worker starts. Until now this tenant — the one
     # built to exercise every layer of the framework — installed no
     # TracerProvider at all, so every `agent_span()` in it was a no-op and no
