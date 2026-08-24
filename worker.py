@@ -56,6 +56,16 @@ def _otlp_exporter():
             OTLPSpanExporter,
         )
     except ImportError:
+        # NOT the same state as "no endpoint configured", which returns None a
+        # few lines up and is a deliberate local-only run. Here the operator
+        # asked for export and will not get it — silently, since tracing fails
+        # open everywhere else by design. Say so once, loudly.
+        print(
+            f"[worker] AGENT_PHOENIX_ENDPOINT is set to {endpoint} but the OTLP "
+            f"exporter is not installed — spans will be created and attributed "
+            f"but NOT exported. Install opentelemetry-exporter-otlp-proto-http.",
+            file=sys.stderr,
+        )
         return None
     return OTLPSpanExporter(endpoint=f"{endpoint.rstrip('/')}/v1/traces")
 
