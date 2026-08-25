@@ -54,8 +54,15 @@ your edits there take effect without reinstalling.
 2. Backends: Postgres (`BUDGET_BACKEND=postgres`), Temporal, Phoenix — see
    `OPERATIONS.md` §0 in the framework repo.
 3. `make worker` then `python3 trigger_workflow.py sanc-005` → workflow
-   pauses at the HITL gate; approve via the Ops Portal (or send the
-   `hitl_approved` signal). `malf-009` parks in the DLQ for edit-and-resume.
+   pauses at the HITL gate. Record the decision with
+   `python3 resolve_hitl.py <workflow-id>` (add `--reject` to refuse); the id
+   is printed by `trigger_workflow.py`. `malf-009` parks in the DLQ for
+   edit-and-resume, which IS an Ops Portal action ("Replay with edits").
+
+   The Ops Portal does not approve HITL gates — it does DLQ replay and
+   discard. This line used to say it did, and no sender shipped here either,
+   so policy-006's "recorded human decision" had no reachable path and a HIGH
+   application could only time out.
 
 ## Layout
 
