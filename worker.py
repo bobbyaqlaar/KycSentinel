@@ -72,15 +72,16 @@ async def main() -> None:
     # copies of that logic across two languages, only one of which handled an
     # endpoint that already names the path. runtime/otlp.py is the one copy now.
     from runtime.tracing import configure_telemetry
-    from runtime.version import warn_if_declared_version_differs
 
     configure_telemetry()
 
-    # `framework.version: "1.3.x"` in tenant.yaml is a declaration that nothing
-    # installs from — requirements.txt's pin is what a build resolves. The two
-    # drifted once already, in the other direction: the pin said v1.2.0 while
-    # the code needed 1.3. This says so at startup instead.
-    warn_if_declared_version_differs()
+    # NOT YET: `runtime.version.warn_if_declared_version_differs()`, which warns
+    # when this file's `framework.version` declaration disagrees with the
+    # installed package. It landed in the framework AFTER the v1.3.0 tag this
+    # repo pins, so importing it here would ImportError on a real `docker build`
+    # — the exact break the pin bump fixed this morning, and
+    # test/test_pin_satisfies_the_code.py caught it within minutes of my
+    # introducing it. Add the call when the pin next moves.
 
     client = await connect_temporal()   # address + TEMPORAL_TLS + timeout, one place
     worker = Worker(

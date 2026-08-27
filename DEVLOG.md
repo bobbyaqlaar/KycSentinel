@@ -1424,3 +1424,39 @@ matrix for the full text):
 The DLQ one matters most here: this repo's INTAKE step is a
 `run_with_recoverable_step`, so the portal replay path is one this tenant
 actually exercises.
+
+### 2026-08-27 (later) — tests that belong here, moved here
+
+AgentSmith's suite had five places resolving `../KYC_Sentinel`: three sweeping
+this repo's `worker.py` for framework wiring, two asserting things about
+`.agent-rfc/fixtures/hallucination_evals.json`. All five skipped or returned
+silently when the sibling was absent, which is every CI runner — the framework's
+CI does not check this repo out. They had never run where the result was
+reported.
+
+They are assertions about THIS repo, so they live here now:
+
+- `test/test_worker_wiring.py` — the worker installs telemetry, and loads `.env`
+  before anything reads it. Read from the AST, because `worker.py`'s comments
+  name those functions while explaining the ordering and a comment is not a
+  call.
+- `test/test_hallucination_fixture.py` — every `retrieved_context` id exists in
+  the corpus, and the suite has a positive control. F7 cannot be measured by a
+  suite that has nothing ungrounded in it.
+
+This repo is the exception that made the coupling easy to write: it sits beside
+the framework because it is the demo tenant. Any other tenant is a separate
+repository that AgentSmith monitors over the wire and cannot read.
+
+### The pin caught me the same hour
+
+`worker.py` briefly called `runtime.version.warn_if_declared_version_differs()`,
+added to the framework right after the v1.3.0 tag this repo pins. That is an
+ImportError on a real `docker build` — the identical break the morning's pin
+bump fixed. `test/test_pin_satisfies_the_code.py`, added hours earlier, failed
+on it immediately.
+
+The call is reverted with a comment saying why, and
+`test_the_worker_does_not_call_ahead_of_its_pin` names it specifically so the
+two guards fail together and the output explains itself. Add the call when the
+pin next moves.
