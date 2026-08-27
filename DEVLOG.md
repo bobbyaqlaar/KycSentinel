@@ -1362,3 +1362,65 @@ AND a passing probe, and drives a queue that re-runs any suite still without a
 verdict, one window per daily reset, hallucination first. Its ghost-citation
 positive control has never been graded by a live judge; that is the result the
 run exists to obtain.
+
+---
+
+## 2026-08-27 — pinned to framework v1.3.0
+
+`requirements.txt` → `@v1.3.0`, `framework.version` → `1.3.x`.
+
+**This bump fixes a live break, it is not housekeeping.** The repo was pinned to
+`v1.2.0` while `worker.py` imported `runtime.config` and `pipeline.py` imported
+`runtime.tenancy` — neither module exists at that tag. A `docker build`, or a
+Cloud Run `--source` deploy, would have failed at worker startup. Both files are
+owned by this repo, so no framework change caused it and none could have fixed
+it.
+
+CI never saw it: `ci.yml` installs the framework from `$AGENTSMITH_DIR` so PRs
+test against the framework's HEAD, which is deliberate. The cost is that CI
+validates a version this repo does not ship, while `requirements.txt` is what a
+standalone build resolves — so the one thing CI proved was the one thing not in
+question.
+
+`test/test_pin_satisfies_the_code.py` closes that. It parses every
+`from runtime.X import ...` in this repo and checks each module and symbol
+against the pinned tag in a framework checkout. Confirmed against the broken
+state: pointed back at v1.2.0 it reports `runtime/config.py`,
+`runtime/tenancy.py`, `runtime.tracing.AgentIdentityProcessor` and
+`runtime.tracing.configure_telemetry`. It skips loudly rather than passing when
+no tagged checkout is available.
+
+### The signal the pin was gating
+
+`resolve_hitl.py` sent the UNADDRESSED `hitl_approved(approved)` and said why:
+v1.2.0's `BaseAgentWorkflow` has no handler for `hitl_approved_for`, and
+Temporal drops a signal with no registered handler with nothing but a warning —
+so the addressed form would have looked like it worked and done nothing. Its
+docstring set the condition: *switch when the pin moves past a release
+containing it, not before.* v1.3.0 contains it, so it now sends
+`hitl_approved_for("kyc-decision", approved)`.
+
+Addressed matters even with one gate. An unaddressed approval is taken by
+whichever gate happens to be waiting, so it is correct only while that stays
+true — and adding a second gate to `kyc_workflow.py` is an ordinary change that
+would silently land an approval on the wrong one.
+`test_the_sender_and_the_workflow_agree_on_the_gate_id` reads the id from both
+sides rather than restating it, because a constant written twice in a test is a
+third copy of it.
+
+### What v1.3.0 brings that this tenant runs into
+
+Five API changes, all already absorbed here (see the framework's compatibility
+matrix for the full text):
+
+- token counts are `Optional[int]` — a provider reporting no `usage` yields
+  `None`, where 1.2.x yielded `0` and made a real call look free;
+- `DeadLetterQueue.replay()` raises `AlreadyResolvedError` on a non-pending
+  entry, so a double-clicked portal replay no longer re-signals the workflow;
+- a HITL approval is consumed by the gate that reads it;
+- `run_with_hitl_gate` raises when the gate activity returns `None`;
+- `audit_token_velocity_circuit` raises `ValueError` on `None` token counts.
+
+The DLQ one matters most here: this repo's INTAKE step is a
+`run_with_recoverable_step`, so the portal replay path is one this tenant
+actually exercises.

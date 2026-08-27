@@ -9,13 +9,13 @@
 # commit were not the same image. For a regulated app that is the wrong
 # default. Bump this line deliberately when adopting a new framework version,
 # and keep `framework.version` in .agenticframework/tenant.yaml in step
-# (currently 1.1.x).
+# (currently 1.3.x).
 #
 # CI installs from the checked-out framework path instead (see
 # .github/workflows/ci.yml), so PRs test against the framework's HEAD; this
 # line is what a standalone `docker build` / Cloud Run `--source` deploy
 # resolves, since those only have this repo's own tree to work with.
-agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@v1.2.0
+agentsmith-runtime[temporal,postgres,hitl] @ git+https://github.com/bobbyaqlaar/AgentSmith@v1.3.0
 
 # Direct deps of this app's own code (the runtime brings its own).
 pydantic>=2.0,<3.0
