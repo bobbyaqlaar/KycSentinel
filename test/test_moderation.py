@@ -116,6 +116,14 @@ def test_never_raises_on_odd_input():
         "Rated HIGH because the applicant holds a Syrian passport.",
         "Rated HIGH because the applicant is Sudanese.",
         "Rated HIGH because he is Emirati.",
+        # The explicit -i list. These are not reachable by shape at all, so
+        # each one is held by its entry and nothing else.
+        "Rated HIGH because the applicant is Saudi.",
+        "Rated HIGH because the customer is Pakistani, per the profile.",
+        # A following capital does NOT disqualify a listed demonym — the
+        # lookahead exists to protect given names, and a list entry is a
+        # nationality whatever follows it.
+        "Rated HIGH because the applicant is Saudi Arabian.",
         "Rated HIGH because the applicant is Muslim.",
         "Rated HIGH because she is a woman.",
         "Rated HIGH because of the applicant age.",
@@ -156,9 +164,16 @@ def test_a_rating_justified_by_a_protected_attribute_is_blocked(rationale: str) 
         "Rated HIGH because the applicant is Levi Stern, a confirmed sanctions match.",
         "Rated HIGH because the applicant is Yuki Tanaka, adverse media confirmed.",
         "Rated HIGH because the applicant is Julian Reyes, adverse media confirmed.",
-        # No surname to lean on — this one is held by the `{2,}` bound alone,
-        # and it is the only case in this file that is. See the bound's own test.
-        "Rated HIGH because the applicant is Ali, a listed PEP.",
+        # Given names ending in -i, with a COMMA rather than a surname, so the
+        # lookahead cannot help. These were blocked until the -i suffix stopped
+        # being matched by shape; each is a correct rationale refused because of
+        # what the person is called.
+        "Rated HIGH because the applicant is Ravi, a listed PEP.",
+        "Rated HIGH because the applicant is Heidi, a confirmed sanctions match.",
+        "Rated HIGH because the applicant is Naomi, adverse media confirmed.",
+        # Held by the `{2,}` bound alone: T + r + ish. The only case here that
+        # is, so it is what the bound's mutation has to fail on.
+        "Rated HIGH because the applicant is Trish, a listed PEP.",
     ],
 )
 def test_a_correct_rationale_is_not_blocked(rationale: str) -> None:
@@ -175,8 +190,11 @@ def test_the_demonym_shape_needs_a_capital() -> None:
 
     The compiled pattern is IGNORECASE for the English around it, which would
     otherwise discard the one signal separating a demonym from an ordinary word
-    ending in -ian, -ese, -ish or -i. The `-i` suffix is the loose one: plenty
-    of ordinary words end in a bare `i`.
+    ending in -ian, -ese or -ish.
+
+    The `-i` suffix used to be here too and no longer is: it could not be made
+    safe by case, length or lookahead, so it moved to an explicit list. See
+    test_the_i_demonyms_are_an_explicit_list.
 
     The cases below are chosen to DISCRIMINATE. An earlier version used
     "compliant", which fails the suffix either way, so the assertion held with
@@ -196,7 +214,7 @@ def test_the_demonym_shape_needs_a_capital() -> None:
 def test_a_demonym_is_disqualified_by_a_following_surname() -> None:
     """The lookahead that keeps given names out, asserted in both directions.
 
-    A capitalised word ending in -ian/-ese/-ish/-i is as often a person as a
+    A capitalised word ending in -ian/-ese/-ish is as often a person as a
     nationality, and it appears in the same position: right after "the applicant
     is". What separates them is what follows — a demonym ends the noun phrase, a
     given name runs on into a surname.
@@ -223,3 +241,40 @@ def test_a_demonym_is_disqualified_by_a_following_surname() -> None:
     assert not classify_output(
         "Rated HIGH because the applicant holds a Syrian passport."
     ).allowed
+
+
+def test_the_i_demonyms_are_an_explicit_list() -> None:
+    """The -i suffix is matched by enumeration, not by shape, and this is why.
+
+    "Saudi" and "Heidi" are the same shape — capital, three lowercase, a bare
+    `i`. No case rule, length bound or lookahead separates them, and the comma
+    form ("is Ravi, a listed PEP") defeats the lookahead that saves the -ian
+    names. Shape matching here means refusing correct rationales because of what
+    the applicant is called.
+
+    The cost of the list is bounded recall, asserted below as plainly as the
+    hits: an -i demonym that is not an entry is MISSED, and the judge is the
+    control for that. This test exists so that the trade is visible to whoever
+    edits the list next, rather than being rediscovered.
+    """
+    # On the list — held by the entry alone, unreachable by shape.
+    for rationale in (
+        "Rated HIGH because the applicant is Saudi.",
+        "Rated HIGH because the applicant is Emirati.",
+        "Rated HIGH because the customer is Pakistani.",
+        "Rated HIGH because he is Iraqi.",
+    ):
+        assert not classify_output(rationale).allowed, f"not blocked: {rationale}"
+
+    # Given names of the same shape — the whole reason the list exists.
+    for rationale in (
+        "Rated HIGH because the applicant is Heidi, a listed PEP.",
+        "Rated HIGH because the applicant is Ravi, a listed PEP.",
+        "Rated HIGH because the applicant is Naomi, adverse media confirmed.",
+    ):
+        assert classify_output(rationale).allowed, f"wrongly blocked: {rationale}"
+
+    # THE COST, asserted rather than described: an -i demonym off the list is
+    # missed. If this ever starts failing, someone added the entry — delete the
+    # line, do not weaken the assertion.
+    assert classify_output("Rated HIGH because the applicant is Malawi.").allowed

@@ -1545,3 +1545,44 @@ Five mutations, all caught: dropping the case-sensitivity, loosening the length
 bound, dropping the lookahead, unscoping the lookahead, and dropping the
 justifier from the category branch. The length bound is held by one case, "is
 Ali, a listed PEP" — short enough that `{1,}` blocks it and `{2,}` does not.
+
+---
+
+## 2026-08-28 — the -i demonyms became a list
+
+The lookahead in the previous entry saved "is Ravi Kumar" but not "is Ravi, a
+listed PEP": a comma instead of a surname defeats it, and the bare -i suffix
+cannot be told from a given name by shape under any rule. "Saudi" and "Heidi"
+are the same shape — capital, three lowercase, a bare i. Ravi, Levi, Yuki, Rumi
+and Naomi all collide with real nationalities.
+
+So -i moved out of the shape and into an explicit list, weighted to the Gulf and
+South Asia. -ian/-ese/-ish stay shape-matched with the lookahead, because there
+the suffix carries real information and the surname test works.
+
+This reverses the "no catalog to maintain" decision from two commits ago, and
+the reversal is the point: the catalog is a real cost, but it is a smaller cost
+than refusing a correct rationale because of what the applicant is called. The
+trade is bounded recall for zero name collisions.
+
+The cost is asserted, not just described. An -i demonym absent from the list is
+missed, and a test says so outright with "Malawi" — with a note that if it ever
+starts failing, someone added the entry and the line should be deleted rather
+than the assertion weakened. A control's blind spot belongs in the test suite
+where an editor will meet it, not in a comment they can skim.
+
+One entry does not take the lookahead: a listed demonym is a nationality
+whatever follows it, so "is Saudi Arabian" blocks. Mutation-tested — adding the
+lookahead to the list branch fails.
+
+### A test that stopped discriminating
+
+"is Ali, a listed PEP" was the case holding the `{2,}` length bound. Removing
+the -i suffix from the shape means "Ali" now matches neither way, so that case
+would have sat in the suite proving nothing — the exact failure this file has
+already produced twice. It is "Trish" now (T + r + ish), which `{1,}` blocks and
+`{2,}` does not, and the length mutation fails on it.
+
+Seven mutations, all caught: case-sensitivity, the length bound, the lookahead,
+the lookahead's scope, the list's contents, the lookahead wrongly applied to the
+list, and the justifier on the category branch.
