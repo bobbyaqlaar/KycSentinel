@@ -1460,3 +1460,47 @@ The call is reverted with a comment saying why, and
 `test_the_worker_does_not_call_ahead_of_its_pin` names it specifically so the
 two guards fail together and the output explains itself. Add the call when the
 pin next moves.
+
+---
+
+## 2026-08-28 — policy-007 caught the category, not the instance
+
+`agents/moderation.py` matched a justifying construction near a protected
+attribute's CATEGORY NAME — "because of nationality". A rationale almost never
+says that. It says "because the applicant is Syrian", "because she is a woman",
+"because the applicant is Muslim". All three passed a control whose entire
+purpose is to catch them, and the demo script says on stage that it catches
+them.
+
+Both shapes are matched now, and both still require the justifier — that is
+what keeps an incidental mention legal. "Applicant is a Syrian national;
+sanctions screening returned no match, rated LOW" states nationality as a
+profile field and must not be blocked. Blocking a correct rationale stops a real
+decision path, so over-reach is not the safe direction here; nine benign
+rationales are asserted allowed alongside ten that must block.
+
+Nationality is matched by demonym SHAPE rather than a country list — a list
+would be a new catalog to maintain, and the corpus has none to derive from. The
+shape is confined to "<applicant|client|he|she|they> is/holds <Term>", which is
+what separates "because the applicant is Syrian" from "because Al-Noor Trading
+appeared on the sanctions list".
+
+Stated in the module rather than left implied: this still cannot catch an
+implication with no justifying construction. "The applicant is Iranian. Risk is
+elevated." is two sentences a regex reads as two facts. The independent judge is
+the control for that shape; this hook is the cheap backstop that must at least
+catch the explicit form.
+
+The PII half needed no change — it calls the framework's `detect_pii`, so the
+framework's Arabic-Indic numeral fix arrived here for free. That is the second
+time the shared-module extraction has paid for itself.
+
+### Two tests that passed for the wrong reason
+
+Mutation testing found both, and neither would have been visible otherwise.
+Removing the justifier requirement from the category branch left every "must
+allow" case green, because none of them named a category outside a
+justification — a profile-field case was missing. And the case-sensitivity test
+used "compliant", which fails the demonym suffix either way, so it held with the
+case-sensitivity removed. It uses "multi-national" and "semi-retired" now:
+lowercase, realistic, and matching the loose `-i` suffix.

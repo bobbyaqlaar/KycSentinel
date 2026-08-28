@@ -42,12 +42,52 @@ from runtime.moderation import ModerationResult
 _REPORTED_PII_TYPES = ("emirates_id", "card")
 
 # policy-007: protected attributes must not appear as rating justification.
-# Matched only in a *justifying* construction ("because ... nationality"),
-# not as an incidental profile field, to avoid flagging every rationale that
-# happens to mention a country.
+#
+# TWO SHAPES, because a model writes the second one. The original pattern
+# matched a justifier near a CATEGORY NAME — "because of nationality" — and a
+# rationale almost never says that. It says "because the applicant is Syrian",
+# "because she is a woman", "because the applicant is Muslim". Every one of
+# those passed a control whose whole purpose is to catch them, and the demo
+# says on stage that it catches them.
+#
+# Both shapes require the justifier. That is what keeps an incidental mention
+# legal: "Applicant is a Syrian national; sanctions screening returned no match,
+# rated LOW" states nationality as a profile field and must not be blocked —
+# blocking a correct rationale stops a real decision path, so over-reach here is
+# not the safe direction.
+_JUSTIFIER = r"(?:because|due to|owing to|given|based on)"
+
+# The category named outright.
+_CATEGORY = (
+    r"nationality|national origin|ethnicity|gender|sex|religion|race|age|"
+    r"marital status|disability|caste|tribe|skin colour|skin color"
+)
+
+# The category named by instance. Religion and gender are short closed lists.
+# Nationality is not, so it is matched by demonym SHAPE — and only inside
+# "<subject> is/holds <term>", which is what separates "because the applicant is
+# Syrian" from "because Al-Noor Trading appeared on the sanctions list".
+_RELIGION = r"muslim|christian|jewish|hindu|buddhist|sikh|catholic|protestant"
+_GENDER = r"wom[ae]n|m[ae]n|female|male|transgender"
+# Case-SENSITIVE, scoped: the capital is the signal that separates a demonym
+# from an ordinary word, and the IGNORECASE flag on the compiled pattern
+# would otherwise discard it. `{2,}` because "Syrian" is S + yr + ian.
+_DEMONYM = r"(?-i:[A-Z][a-z]{2,}(?:ian|ese|ish|i))\b"
+_INSTANCE = (
+    rf"(?:applicant|customer|client|he|she|they)\s+"
+    rf"(?:is|are|was|were|holds?|has)\s+(?:an?\s+)?"
+    rf"(?:{_RELIGION}|{_GENDER}|{_DEMONYM})"
+)
+
+# WHAT THIS STILL CANNOT CATCH, stated rather than implied by silence: an
+# implication with no justifying construction. "The applicant is Iranian. Risk
+# is elevated." is two sentences a regex reads as two facts. The independent
+# judge is the control for that shape; this hook is the cheap backstop that must
+# at least catch the explicit form, and until now it did not catch the form a
+# model actually writes.
 _PROTECTED_JUSTIFICATION = re.compile(
-    r"\b(because|due to|owing to|given|based on)\b[^.]{0,60}\b"
-    r"(nationality|national origin|ethnicity|gender|sex|religion|race)\b",
+    rf"\b{_JUSTIFIER}\b[^.]{{0,60}}\b(?:{_CATEGORY})\b"
+    rf"|\b{_JUSTIFIER}\b[^.]{{0,40}}{_INSTANCE}",
     re.IGNORECASE,
 )
 

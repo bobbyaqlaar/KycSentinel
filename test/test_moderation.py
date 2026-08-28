@@ -92,3 +92,91 @@ def test_never_raises_on_odd_input():
     """A classifier that throws would take the LLM call down with it."""
     for text in ("", "   ", "🙂" * 50, "-" * 500):
         assert classify_output(text) is not None
+
+
+# ── policy-007: a model names the instance, not the category ─────────────────
+#
+# The check matched a justifier near a CATEGORY NAME — "because of nationality"
+# — and a rationale almost never says that. It says "because the applicant is
+# Syrian", "because she is a woman", "because the applicant is Muslim". Every
+# one of those passed a control whose entire purpose is to catch them, and the
+# demo script says on stage that it catches them.
+#
+# What it cannot catch is stated in the module: an implication with no
+# justifying construction at all ("The applicant is Iranian. Risk is elevated.")
+# reads as two facts to a regex. The judge is the control for that; this hook is
+# the cheap backstop that must at least catch the explicit form.
+
+
+@pytest.mark.parametrize(
+    "rationale",
+    [
+        "Rated HIGH because of the applicant nationality.",
+        "Rated HIGH because the applicant is Syrian.",
+        "Rated HIGH because the applicant holds a Syrian passport.",
+        "Rated HIGH because the applicant is Sudanese.",
+        "Rated HIGH because he is Emirati.",
+        "Rated HIGH because the applicant is Muslim.",
+        "Rated HIGH because she is a woman.",
+        "Rated HIGH because of the applicant age.",
+        "Rated HIGH due to religion.",
+        "Elevated based on the client is Iranian.",
+    ],
+)
+def test_a_rating_justified_by_a_protected_attribute_is_blocked(rationale: str) -> None:
+    result = classify_output(rationale)
+    assert not result.allowed, f"not blocked: {rationale}"
+    assert "protected_attribute_justification" in result.reasons
+
+
+@pytest.mark.parametrize(
+    "rationale",
+    [
+        "Rated HIGH because sanctions screening returned a confirmed match.",
+        "Applicant is a Syrian national; sanctions screening returned no match, rated LOW.",
+        "Rated HIGH because Al-Noor Trading appeared on the sanctions list.",
+        "Rated LOW because the applicant provided complete source-of-funds evidence.",
+        "Rated HIGH because adverse media links the applicant to a supplier dispute.",
+        "The applicant is Emirati. Rated LOW: no sanctions or adverse media hits.",
+        "Rated HIGH because the company is registered in a high-risk jurisdiction.",
+        "Rated LOW because the applicant is compliant with all requirements.",
+        "Rated HIGH because the applicant is listed on a watchlist.",
+        # A protected attribute named as a PROFILE FIELD, with no justifying
+        # construction anywhere. Mutation testing found this missing: removing
+        # the justifier requirement from the category branch left every other
+        # case in this list green, because none of them said "nationality"
+        # outside a justification.
+        "Applicant nationality is recorded in the profile. Rated LOW: no hits.",
+        "Gender and age are captured on the intake form; neither affects scoring.",
+    ],
+)
+def test_a_correct_rationale_is_not_blocked(rationale: str) -> None:
+    """The half that matters as much. Blocking a correct rationale stops a real
+    decision path, so over-reach is not the safe direction — and a KYC rationale
+    legitimately states nationality as a profile field. Every case here mentions
+    a protected attribute or a demonym WITHOUT justifying the rating by it.
+    """
+    assert classify_output(rationale).allowed, f"wrongly blocked: {rationale}"
+
+
+def test_the_demonym_shape_needs_a_capital() -> None:
+    """`(?-i:...)` scopes the case-sensitivity off for the demonym alone.
+
+    The compiled pattern is IGNORECASE for the English around it, which would
+    otherwise discard the one signal separating a demonym from an ordinary word
+    ending in -ian, -ese, -ish or -i. The `-i` suffix is the loose one: plenty
+    of ordinary words end in a bare `i`.
+
+    The cases below are chosen to DISCRIMINATE. An earlier version used
+    "compliant", which fails the suffix either way, so the assertion held with
+    the case-sensitivity removed — a test that passed for a reason unrelated to
+    what it claimed. Mutation testing is what surfaced that.
+    """
+    # Lowercase, realistic in a KYC rationale, and matches the suffix: these
+    # are wrongly blocked the moment the demonym stops requiring a capital.
+    assert classify_output(
+        "Rated HIGH because the applicant is multi-national in structure."
+    ).allowed
+    assert classify_output("Rated LOW because they are semi-retired.").allowed
+    # And the capitalised demonym is still caught.
+    assert not classify_output("Rated LOW because the applicant is Italian.").allowed
