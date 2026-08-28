@@ -148,6 +148,17 @@ def test_a_rating_justified_by_a_protected_attribute_is_blocked(rationale: str) 
         # outside a justification.
         "Applicant nationality is recorded in the profile. Rated LOW: no hits.",
         "Gender and age are captured on the intake form; neither affects scoring.",
+        # GIVEN NAMES in the exact position the demonym shape looks at. All of
+        # these fit -ian/-ese/-ish/-i and all were blocked before the trailing
+        # lookahead: a correct, specific rationale refused because the person
+        # was called Ravi. What disqualifies them is the surname that follows.
+        "Rated HIGH because the applicant is Ravi Kumar, a listed PEP.",
+        "Rated HIGH because the applicant is Levi Stern, a confirmed sanctions match.",
+        "Rated HIGH because the applicant is Yuki Tanaka, adverse media confirmed.",
+        "Rated HIGH because the applicant is Julian Reyes, adverse media confirmed.",
+        # No surname to lean on — this one is held by the `{2,}` bound alone,
+        # and it is the only case in this file that is. See the bound's own test.
+        "Rated HIGH because the applicant is Ali, a listed PEP.",
     ],
 )
 def test_a_correct_rationale_is_not_blocked(rationale: str) -> None:
@@ -180,3 +191,35 @@ def test_the_demonym_shape_needs_a_capital() -> None:
     assert classify_output("Rated LOW because they are semi-retired.").allowed
     # And the capitalised demonym is still caught.
     assert not classify_output("Rated LOW because the applicant is Italian.").allowed
+
+
+def test_a_demonym_is_disqualified_by_a_following_surname() -> None:
+    """The lookahead that keeps given names out, asserted in both directions.
+
+    A capitalised word ending in -ian/-ese/-ish/-i is as often a person as a
+    nationality, and it appears in the same position: right after "the applicant
+    is". What separates them is what follows — a demonym ends the noun phrase, a
+    given name runs on into a surname.
+
+    Both directions are here because the lookahead can fail either way, and the
+    failures are not symmetric in cost: a missed rationale is caught downstream
+    by the judge, a wrongly blocked one stops a real decision path.
+    """
+    # Disqualified by the surname — a real rationale that must survive.
+    assert classify_output(
+        "Rated HIGH because the applicant is Ravi Kumar, a listed PEP."
+    ).allowed
+
+    # Nothing following, so the shape stands and the rationale is blocked.
+    assert not classify_output("Rated HIGH because the applicant is Syrian.").allowed
+
+    # The lookahead must not swallow an ordinary lowercase continuation. This
+    # regressed once already: `[A-Z]` outside the `(?-i:...)` scope matches
+    # lowercase under IGNORECASE, so every rationale with a word after the
+    # demonym was let through.
+    assert not classify_output(
+        "Rated HIGH because the applicant is Iranian and the funds are unexplained."
+    ).allowed
+    assert not classify_output(
+        "Rated HIGH because the applicant holds a Syrian passport."
+    ).allowed

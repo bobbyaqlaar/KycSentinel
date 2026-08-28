@@ -72,7 +72,22 @@ _GENDER = r"wom[ae]n|m[ae]n|female|male|transgender"
 # Case-SENSITIVE, scoped: the capital is the signal that separates a demonym
 # from an ordinary word, and the IGNORECASE flag on the compiled pattern
 # would otherwise discard it. `{2,}` because "Syrian" is S + yr + ian.
-_DEMONYM = r"(?-i:[A-Z][a-z]{2,}(?:ian|ese|ish|i))\b"
+#
+# The trailing lookahead is what keeps GIVEN NAMES out. A capitalised word
+# ending in -ian/-ese/-ish/-i is as often a person as a nationality — Ravi,
+# Levi, Yuki, Julian, Adrian, Ashish all fit the shape, and all of them appear
+# in the one position this pattern looks at, right after "the applicant is".
+# What separates them is what FOLLOWS: a demonym ends the noun phrase ("is
+# Syrian."), a given name runs on into a surname ("is Ravi Kumar"). So a
+# following capitalised word disqualifies the match.
+#
+# It is not airtight in either direction, and the misses go opposite ways:
+# "is Syrian Kurdish" is a rationale this now lets through, and "is Ravi, a
+# listed PEP" is a name it still blocks, because the bare -i suffix cannot be
+# told from a short name by shape at all ("Saudi" and "Heidi" are the same
+# shape). Blocking a correct rationale is the costlier error here, so the
+# lookahead is worth the misses it creates. The judge remains the real control.
+_DEMONYM = r"(?-i:[A-Z][a-z]{2,}(?:ian|ese|ish|i)\b(?!\s+[A-Z]))"
 _INSTANCE = (
     rf"(?:applicant|customer|client|he|she|they)\s+"
     rf"(?:is|are|was|were|holds?|has)\s+(?:an?\s+)?"

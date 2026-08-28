@@ -1504,3 +1504,44 @@ justification — a profile-field case was missing. And the case-sensitivity tes
 used "compliant", which fails the demonym suffix either way, so it held with the
 case-sensitivity removed. It uses "multi-national" and "semi-retired" now:
 lowercase, realistic, and matching the loose `-i` suffix.
+
+---
+
+## 2026-08-28 — the demonym shape was blocking people called Ravi
+
+Follow-up to the policy-007 rewrite above, found by mutation testing the commit
+that shipped it: the `{2,}` length bound was unasserted, and pulling on that
+thread showed the shape had a false-positive class I had not considered.
+
+A capitalised word ending in -ian/-ese/-ish/-i is as often a person as a
+nationality. Ravi, Levi, Yuki, Julian, Adrian, Ashish all fit — and they appear
+in exactly the position the pattern looks at, right after "the applicant is". So
+"Rated HIGH because the applicant is Ravi Kumar, a listed PEP" was blocked: a
+correct, specific, entirely legitimate rationale refused because of the person's
+name. That is the error direction the commit before this one explicitly called
+the costlier one, shipped in the same change that said so.
+
+Length cannot separate them — "Saudi" and "Heidi" are the same shape. What
+separates them is what FOLLOWS: a demonym ends the noun phrase ("is Syrian."),
+a given name runs on into a surname ("is Ravi Kumar"). A trailing
+`(?!\s+[A-Z])` disqualifies the match.
+
+It is not airtight either way, and the module now says so: "is Syrian Kurdish"
+is a rationale this lets through, and "is Ravi, a listed PEP" is a name it still
+blocks, because the bare -i suffix cannot be told from a short name by shape at
+all. Blocking a correct rationale is the costlier error, so the lookahead is
+worth the misses it creates. The judge remains the real control.
+
+### The lookahead broke everything on the first attempt
+
+Placed after the `(?-i:...)` group rather than inside it, `[A-Z]` fell back
+under the pattern's IGNORECASE flag and matched lowercase — so "is Iranian and
+the funds are unexplained" and "holds a Syrian passport" both stopped being
+blocked. Every rationale with an ordinary word after the demonym was let
+through. This is the SECOND time this exact scope error has appeared in this one
+pattern; the regression is a test now rather than a note.
+
+Five mutations, all caught: dropping the case-sensitivity, loosening the length
+bound, dropping the lookahead, unscoping the lookahead, and dropping the
+justifier from the category branch. The length bound is held by one case, "is
+Ali, a listed PEP" — short enough that `{1,}` blocks it and `{2,}` does not.
