@@ -229,11 +229,28 @@ profiles:
     # every call. See the catalog entry for how invisible that was.
     #
     # This route was previously abandoned FOR QUOTA — "~20 requests/day against
-    # the 22 the three suites need". That constraint no longer binds: a full
-    # 22-call cycle completed on 2026-08-19 with one transient error, and the
-    # cycle before it completed clean. Do not restore the alternating-cron split
-    # on the strength of the old note without re-measuring; it cost a day of
-    # latency on two of the three gates.
+    # the 22 the three suites need". On 2026-08-19 a full 22-call cycle
+    # completed with one transient error, and the cycle before it completed
+    # clean, so this note read: the constraint no longer binds, do not restore
+    # the alternating-cron split without re-measuring.
+    #
+    # It was re-measured on 2026-08-23, and the conclusion reversed:
+    #
+    #     429 RESOURCE_EXHAUSTED
+    #     quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier
+    #     quotaValue: 20   model: gemini-3-flash
+    #
+    # The limit is hard, it is per DAY, and it resets at midnight
+    # America/Los_Angeles. Two clean cycles were luck of the reset boundary,
+    # not headroom. The split is restored and `ci.yml` enforces it: golden on
+    # every push, fairness Mon/Wed/Fri, hallucination Tue/Thu/Sat.
+    #
+    # The old wording survived here for eight days telling readers not to do
+    # what ci.yml had already done, and README.md believed it and told the
+    # world all three gates ran on every push. Two suites out of three were not
+    # covering a push at all. If you re-measure again and the ceiling has
+    # moved, change this note, ci.yml AND README.md together — the three
+    # disagreeing is how the claim got out.
     #
     # PACING IS LOAD-BEARING on this tier, though. EVAL_RPM=12 is what the
     # calibration ran at. Unpaced, this key returns errors — and an all-errored

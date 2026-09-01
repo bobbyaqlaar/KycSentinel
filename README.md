@@ -96,24 +96,41 @@ so CI stayed green while grading nothing for several days. If you take one
 operational habit from this repo, take this one: on a judged gate, read the
 run's output rather than trusting the tick.
 
-With the secret set, **all three gates run on every push** — golden (12 judge
-calls), fairness (4) and hallucination (6), 22 in total:
+With the secret set, **only golden runs on every push.** Fairness and
+hallucination run on alternating crons, because this judge's free tier allows
+20 requests a day and the three suites need 22 — a full cycle goes red on quota
+rather than on quality:
 
 | Trigger | Suites | Judge calls |
 |---|---|---|
-| push / PR | golden + fairness + hallucination | 22 |
+| push / PR | golden | 12 |
+| cron Mon/Wed/Fri 09:00 UTC | fairness | 4 |
+| cron Tue/Thu/Sat 09:00 UTC | hallucination | 6 |
 | `workflow_dispatch` (`judged_suites` input) | `all` by default, or one suite | 4–22 |
 
-They ran on alternating crons until 2026-08-12, because this judge's free tier
-allows 20 requests and the suites need 22 — a full cycle went red on quota
-rather than on quality. The split was retired when the judge moved to Groq, and
-stayed retired after the move back: paced at `EVAL_RPM=12` a single uncontended
-run completes all 22 calls. Run two at once, or grade locally at the same time,
-and they starve each other. A gate that reports two days late is a weaker gate,
-but a gate that silently grades nothing is no gate at all — so read the run.
+This paragraph used to claim all three ran on every push, on the strength of one
+22-call cycle completing on 2026-08-19 at `EVAL_RPM=12`. Re-measured 2026-08-23,
+the limit is hard and it is daily:
 
-`judged_suites` survives for re-running one suite against a fixture change
-without paying for the other two — no longer a quota workaround.
+    429 RESOURCE_EXHAUSTED
+    quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier
+    quotaValue: 20   model: gemini-3-flash
+
+so the split stands, and `ci.yml` has enforced it throughout — the README was
+the only place that said otherwise. Worth stating plainly, because a doc that
+overstates which gates run is the same failure this file spends a page warning
+about: something that reads as guarded and is not. Two suites out of three were
+never covering a push, and nothing about a green tick said so.
+
+The daily budget resets at midnight America/Los_Angeles, and that is the only
+thing that clears it. Probing tells you the per-minute window is open; it says
+nothing about how much of the day's 20 remain. Run two suites at once, or grade
+locally at the same time, and they starve each other. A gate that reports two
+days late is a weaker gate, but a gate that silently grades nothing is no gate
+at all — so read the run.
+
+`judged_suites` is how you re-run one suite against a fixture change without
+paying for the other two.
 
 Thresholds are **not** passed on the command line. They live on the `judge` role
 and were measured against the grader that produced them, so repointing the judge
