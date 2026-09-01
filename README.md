@@ -105,10 +105,20 @@ rather than on quality:
 
 | Trigger | Suites | Judge calls |
 |---|---|---|
-| push / PR | golden | 12 |
+| push / PR touching any non-`.md` file | golden | 12 |
+| push / PR touching **only** `.md` files | none | 0 |
 | cron Mon/Wed/Fri 09:00 UTC | fairness | 4 |
 | cron Tue/Thu/Sat 09:00 UTC | hallucination | 6 |
 | `workflow_dispatch` (`judged_suites` input) | `all` by default, or one suite | 4–22 |
+
+The documentation-only skip exists because a README commit on 2026-09-01 spent
+the day's judge budget — golden graded 6 of 12, took 429 on the rest, and the
+local run queued to grade golden properly lost its window. Prose cannot change
+what the judge says about the agents' output. Everything else still runs on a
+docs change: unit tests, the F-scenario drivers and the security harness, since
+a README edit can contradict the F-table it documents. The skip is announced in
+the run rather than passing quietly, and it fails **open** — any push where the
+changed-file list cannot be determined runs the gate.
 
 This paragraph used to claim all three ran on every push, on the strength of one
 22-call cycle completing on 2026-08-19 at `EVAL_RPM=12`. Re-measured 2026-08-23,
