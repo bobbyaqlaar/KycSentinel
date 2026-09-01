@@ -30,8 +30,10 @@ make demo-all    # F1–F8 scenario drivers
 make demo-f4     # a single scenario
 ```
 
-The framework is a real dependency, pinned in `requirements.txt` to
-`agentsmith-runtime @ v1.1.0`. `AGENTSMITH_DIR` is only for developing against
+The framework is a real dependency, pinned in `requirements.txt` — read the pin
+there rather than here, because it moves and this line has already been left
+behind once (it said `v1.1.0` through the v1.2.0 and v1.3.0 bumps).
+`AGENTSMITH_DIR` is only for developing against
 a live framework checkout — it takes precedence over the installed package so
 your edits there take effect without reinstalling.
 
@@ -69,7 +71,7 @@ your edits there take effect without reinstalling.
 `agents/` one module per agent + `tools.py` + `gateway.py` (fake/real) ·
 `pipeline.py` engine-agnostic pipeline · `workflows/` Temporal workflow on
 `BaseAgentWorkflow` · `corpus/` synthetic policies/sanctions/media ·
-`fixtures/applicants.json` 12 profiles · `.agent-rfc/` RFCs, golden +
+`fixtures/applicants.json` 15 profiles · `.agent-rfc/` RFCs, golden +
 fairness seeds, security pack · `demo.py` F-drivers · `DEVLOG.md` log.
 
 ## CI gates

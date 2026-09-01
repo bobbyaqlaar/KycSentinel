@@ -4,7 +4,21 @@
 PY ?= python3
 export KYC_FAKE_LLM ?= 1
 
-.PHONY: test pin-evals demo-all demo-f1 demo-f2 demo-f3 demo-f4 demo-f5 demo-f6 demo-f7 demo-f8 worker
+# demo-f1..demo-f8 are deliberately NOT listed here. They are served by the
+# `demo-f%` pattern rule below, and GNU make does not apply implicit or pattern
+# rules to a target declared .PHONY — so naming them here disabled the only rule
+# that could build them. `make demo-f4`, which README's Quick start tells a
+# first-time visitor to run, then printed
+#
+#     make: Nothing to be done for `demo-f4'.
+#
+# and exited 0. Not an error, no scenario, success. The worst of the three
+# outcomes: a reader checking out a public repo saw a green exit and no output
+# and had nothing to tell them which it was.
+#
+# There is no file named demo-f4 for the pattern rule to be confused by, so
+# leaving them off .PHONY costs nothing here.
+.PHONY: test pin-evals demo-all worker
 
 test:
 	$(PY) -m pytest test/ -q
