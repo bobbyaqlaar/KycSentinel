@@ -32,7 +32,8 @@ on:
 
 # WHICH JUDGED SUITES RUN WHEN, and why it is not "all of them, every push".
 #
-#   push / PR       golden          12 judge calls
+#   push / PR       golden          12 judge calls — unless the change is
+#                                   documentation only, see "Scope" below
 #   Mon/Wed/Fri     fairness         4
 #   Tue/Thu/Sat     hallucination    6
 #
@@ -85,6 +86,68 @@ jobs:
         with:
           repository: bobbyaqlaar/AgentSmith   # adjust if the framework repo name differs
           path: AgenticFramework
+      # Did this change touch anything a judged gate could be affected by?
+      #
+      # The golden suite costs 12 of the judge's 20 daily calls. On 2026-09-01 a
+      # README-only commit spent them: golden graded 6 of 12 and took
+      # 429 RESOURCE_EXHAUSTED on the rest, and the local run that was queued to
+      # grade golden properly had to wait another day for a reset. A prose edit
+      # cannot change what the judge would say about the agents' output, so
+      # paying a full gate for one is waste that also starves the real thing.
+      #
+      # Deliberately NOT `paths-ignore:` at the workflow level. That would skip
+      # the offline unit tests, the F-scenario drivers and the security harness
+      # too, and those genuinely should run on a docs change — a README edit can
+      # break the F-table it documents. Only the judged step is gated.
+      #
+      # FAILS OPEN, and that is the important property. Every path where the
+      # changed-file list cannot be determined — a force-push, a new branch
+      # whose `before` is all-zeros, a rate-limited API, a shape this does not
+      # anticipate — leaves `docs_only` unset, and the gate runs. A gate that
+      # quietly stops running because a detection step guessed wrong is the
+      # exact failure this repo exists to demonstrate; spending 12 calls we did
+      # not need to is the cheaper mistake of the two.
+      #
+      # The API is used rather than `git diff` because both checkouts above are
+      # shallow (depth 1), so there is no local history to diff against.
+      - name: "Scope: is this a docs-only change?"
+        id: scope
+        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          case "${{ github.event_name }}" in
+            pull_request)
+              files=$(gh api --paginate \
+                "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" \
+                --jq '.[].filename') || files="" ;;
+            *)
+              files=$(gh api --paginate \
+                "repos/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}" \
+                --jq '.files[].filename') || files="" ;;
+          esac
+
+          if [ -z "$files" ]; then
+            echo "::notice::changed-file list unavailable — running the judged gate (fail open)"
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "changed files:"
+          echo "$files" | sed 's/^/  /'
+
+          # Any path that is not a .md file makes this a code change. Fixtures
+          # under .agent-rfc/ are .json and therefore count as code, which is
+          # right: changing what a case says is exactly when golden must re-run.
+          if echo "$files" | grep -qvE '\.md$'; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "→ code changed; the judged gate will run"
+          else
+            echo "docs_only=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Documentation-only change — SKIPPING the golden gate (12 judge calls). Offline tests, F-scenarios and the security harness still run."
+          fi
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -164,9 +227,14 @@ jobs:
       # directions, and the hallucination bar is still PROVISIONAL because of it.
       # Passing --fail-below here would override it — that is why these steps
       # no longer do. Provenance and the measured numbers: models.yaml.
+      # `steps.scope.outputs.docs_only != 'true'` rather than `== 'false'`: the
+      # scope step does not run on dispatch, and an unset output must mean RUN.
+      # Written the other way round, a skipped detection step would silently
+      # disable the gate.
       - name: "Eval: golden scorecard"
         if: >-
-          github.event_name == 'push' || github.event_name == 'pull_request'
+          ((github.event_name == 'push' || github.event_name == 'pull_request')
+           && steps.scope.outputs.docs_only != 'true')
           || (github.event_name == 'workflow_dispatch'
               && (github.event.inputs.judged_suites == 'all'
                   || github.event.inputs.judged_suites == 'golden'))
