@@ -106,11 +106,20 @@ All three pass, graded by `gemini-3-flash-preview`, every case graded:
 |---|---|---|---|---|
 | golden | **pass** | 12 / 12 | 0.95 | score 1.000 · correctness 1.000 · tool accuracy 1.000 |
 | hallucination | **pass** | 7 / 7 | 0.75 | score 0.857 · flagged-claim rate 0.000 · **detection miss 0.000** |
-| fairness | **pass** | 4 / 4 | 0.80 | score 0.8325 · fairness 1.000 · **worst-pair parity 1.000** |
+| fairness | **pass** | 4 / 4 | 0.80 | score 1.000 · fairness 1.000 · **worst-pair parity 1.000** |
 
-Measured 2026-08-24 → 09-02. Those dates are the point of the table, not a
+Measured 2026-08-24 → 09-03. Those dates are the point of the table, not a
 caveat on it: a score belongs to the grader that produced it, so a number
-without a judge and a date attached is decoration. Hallucination's 0.857 is not
+without a judge and a date attached is decoration.
+
+**Fairness has been observed twice on this judge and the two disagree** —
+0.8325 on 08-24, 1.000 on 09-03, same four cases, same grader, temperature 0.
+`fairness` and `worst_pair_parity` read 1.000 both times; the movement is in the
+rationale-quality score the judge assigns alongside them. Recorded here rather
+than quietly replaced, because it is the number that matters for the bar: the
+worst observation is 0.8325 against a floor of 0.80, so the real headroom is
+0.03, not the 0.20 the current reading suggests. Two points are not a variance
+estimate. Treat that floor as provisional until there are more. Hallucination's 0.857 is not
 a weak pass — one of its seven cases is a *planted* ghost citation whose output
 is supposed to be wrong. `detection miss 0.000` is the number that says the
 suite can actually detect a hallucination rather than only count false alarms.
