@@ -98,6 +98,30 @@ so CI stayed green while grading nothing for several days. If you take one
 operational habit from this repo, take this one: on a judged gate, read the
 run's output rather than trusting the tick.
 
+### Where the gates currently stand
+
+All three pass, graded by `gemini-3-flash-preview`, every case graded:
+
+| suite | verdict | cases | bar | measured |
+|---|---|---|---|---|
+| golden | **pass** | 12 / 12 | 0.95 | score 1.000 · correctness 1.000 · tool accuracy 1.000 |
+| hallucination | **pass** | 7 / 7 | 0.75 | score 0.857 · flagged-claim rate 0.000 · **detection miss 0.000** |
+| fairness | **pass** | 4 / 4 | 0.80 | score 0.8325 · fairness 1.000 · **worst-pair parity 1.000** |
+
+Measured 2026-08-24 → 09-02. Those dates are the point of the table, not a
+caveat on it: a score belongs to the grader that produced it, so a number
+without a judge and a date attached is decoration. Hallucination's 0.857 is not
+a weak pass — one of its seven cases is a *planted* ghost citation whose output
+is supposed to be wrong. `detection miss 0.000` is the number that says the
+suite can actually detect a hallucination rather than only count false alarms.
+
+The results live in `.agent-rfc/fixtures/{eval,fairness_eval,hallucination_eval}_results.json`,
+which are **generated and untracked** — each records its own `judge_model`,
+`cases_graded` and timestamp, so read them rather than this table if the two
+ever disagree. Regenerating costs judge calls; see the budget below.
+
+### When each gate runs
+
 With the secret set, **only golden runs on every push.** Fairness and
 hallucination run on alternating crons, because this judge's free tier allows
 20 requests a day and the three suites need 22 — a full cycle goes red on quota
